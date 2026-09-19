@@ -26,7 +26,7 @@ function notice(id, message = "") {
   $(id).hidden = !message;
 }
 
-async function api(path, body) {
+async function api(path, body, { signal, coach = false } = {}) {
   if (body !== undefined && !state.csrf) await bootPromise;
   let response;
   try {
@@ -38,7 +38,9 @@ async function api(path, body) {
           ? {}
           : { "Content-Type": "application/json", "X-CSRF-Token": state.csrf },
       ...(body === undefined ? {} : { body: JSON.stringify(body) }),
-      signal: AbortSignal.timeout(20000),
+      signal: signal
+        ? AbortSignal.any([signal, AbortSignal.timeout(20000)])
+        : AbortSignal.timeout(20000),
     });
   } catch {
     throw new Error(
@@ -60,6 +62,12 @@ async function api(path, body) {
   if (!response.ok)
     throw new Error(result.error || "Something went wrong. Please try again.");
   if (result.csrf_token) state.csrf = result.csrf_token;
+  if (coach)
+    return {
+      feedback: result,
+      source: response.headers.get("X-Spotter-Coach-Source"),
+      reason: response.headers.get("X-Spotter-Coach-Reason"),
+    };
   return result;
 }
 
@@ -404,6 +412,7 @@ $("sign-out").addEventListener("click", (event) => {
   calibration.stop();
   liveWorkout.pause();
   liveWorkout.voice.stop();
+  liveWorkout.review.reset();
   action(event.currentTarget, "global-error", async () => {
     await api("/api/logout", {});
     resetSessionView();
@@ -649,6 +658,8 @@ $("finish-calibration").addEventListener("click", () => {
   showView("ready");
 });
 const liveWorkout = new LiveWorkout({
+  requestCoach: (payload, signal) =>
+    api("/api/coach", payload, { signal, coach: true }),
   onExit: () => {
     renderWorkout();
     showView("plan");

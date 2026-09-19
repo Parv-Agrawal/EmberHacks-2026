@@ -41,6 +41,15 @@ def create_smoke_app():
     def workout_fixture_script():
         return send_file(PROJECT_ROOT / "tests/browser/workout-smoke.js", max_age=0)
 
+    @app.get("/test-coach")
+    def coach_smoke():
+        html = render_template("index.html").replace('/static/js/main.js', '/test-coach.js')
+        return html, {"Cache-Control": "no-store"}
+
+    @app.get("/test-coach.js")
+    def coach_fixture_script():
+        return send_file(PROJECT_ROOT / "tests/browser/coach-smoke.js", max_age=0)
+
     return app
 
 

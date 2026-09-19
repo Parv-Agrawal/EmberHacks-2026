@@ -230,3 +230,128 @@ test("unsupported browsers and disposal remain safe", () => {
   assert.equal(supported.coach.cue("Disposed."), false);
   assert.equal(supported.cancelled(), 1);
 });
+
+test("post-set headlines speak immediately after a cue and bypass cue deduplication", () => {
+  const f = fixture();
+  assert.equal(f.coach.cue("Keep your chest up."), true);
+  f.end();
+  f.at(100);
+  assert.equal(f.coach.headline("Keep your chest up."), true);
+  assert.deepEqual(f.displayed, ["Keep your chest up.", "Keep your chest up."]);
+  f.end();
+  f.at(3599);
+  assert.equal(f.coach.cue("Next set."), false);
+  f.at(3600);
+  assert.equal(f.coach.cue("Next set."), true);
+});
+
+test("headlines cancel active and queued in-set speech without reviving stale events", () => {
+  for (const autoStart of [true, false]) {
+    const f = fixture({ autoStart });
+    f.coach.cue("Old movement cue.");
+    const old = f.spoken[0];
+    const oldStart = old.onstart;
+    const oldEnd = old.onend;
+    f.at(1000);
+    assert.equal(f.coach.headline("Rep four was shallower."), true);
+    assert.equal(f.cancelled(), 1);
+    assert.equal(old.onstart, null);
+    assert.equal(old.onend, null);
+    assert.equal(old.onerror, null);
+    f.at(2000);
+    oldStart();
+    oldEnd();
+    assert.equal(f.coach.active, f.spoken[1]);
+    assert.equal(f.coach.lastStartedAt, autoStart ? 1000 : -Infinity);
+    assert.equal(f.spoken.length, 2);
+    assert.equal(f.coach.cue("Never queue this."), false);
+  }
+});
+
+test("later in-set cues wait 3500ms after the actual headline start", () => {
+  const f = fixture({ autoStart: false });
+  assert.equal(f.coach.headline("A controlled set."), true);
+  f.at(6000);
+  f.start();
+  f.end();
+  f.at(9499);
+  assert.equal(f.coach.cue("Next set."), false);
+  f.at(9500);
+  assert.equal(f.coach.cue("Next set."), true);
+});
+
+test("a newer headline replaces the previous headline without cooldown or deduplication", () => {
+  const f = fixture();
+  f.coach.headline("A controlled set.");
+  f.at(1000);
+  assert.equal(f.coach.headline("A controlled set."), true);
+  assert.equal(f.cancelled(), 2);
+  f.end();
+  f.at(4499);
+  assert.equal(f.coach.cue("Next set."), false);
+  f.at(4500);
+  assert.equal(f.coach.cue("Next set."), true);
+});
+
+test("muted, unsupported, disposed, and invalid headlines do not interrupt speech", () => {
+  const muted = fixture();
+  muted.coach.setEnabled(false);
+  assert.equal(muted.coach.headline("Muted."), false);
+  assert.equal(muted.cancelled(), 1);
+  assert.equal(muted.spoken.length, 0);
+
+  const unsupported = fixture({ synthesis: null, Utterance: null });
+  assert.equal(unsupported.coach.headline("Text remains visible."), false);
+
+  const disposed = fixture();
+  disposed.coach.dispose();
+  disposed.coach.setEnabled(true);
+  assert.equal(disposed.coach.headline("Disposed."), false);
+  assert.equal(disposed.cancelled(), 1);
+
+  const f = fixture();
+  f.coach.cue("Current cue.");
+  for (const text of ["", "  ", null, undefined, 42]) {
+    assert.equal(f.coach.headline(text), false);
+  }
+  f.at(NaN);
+  assert.equal(f.coach.headline("Invalid clock."), false);
+  assert.equal(f.cancelled(), 0);
+  assert.equal(f.coach.active, f.spoken[0]);
+});
+
+test("headline speech failures remain contained and never enqueue after failed cancellation", () => {
+  const cancellation = fixture();
+  cancellation.coach.cue("Old cue.");
+  cancellation.synthesis.cancel = () => {
+    throw new Error("Cannot cancel");
+  };
+  assert.equal(cancellation.coach.headline("Cannot overlap."), false);
+  assert.equal(cancellation.spoken.length, 1);
+
+  const constructor = fixture({
+    Utterance: class {
+      constructor() {
+        throw new Error("Unsupported voice");
+      }
+    },
+  });
+  assert.equal(constructor.coach.headline("Unavailable."), false);
+
+  for (const synchronousError of [true, false]) {
+    const f = fixture();
+    f.synthesis.speak = (utterance) => {
+      if (synchronousError) utterance.onerror?.();
+      else throw new Error("Device unavailable");
+    };
+    assert.equal(f.coach.headline("Rejected."), false);
+    assert.equal(f.coach.active, null);
+    assert.deepEqual(f.displayed, []);
+  }
+
+  const asynchronous = fixture();
+  assert.equal(asynchronous.coach.headline("First finding."), true);
+  asynchronous.error();
+  assert.equal(asynchronous.coach.active, null);
+  assert.equal(asynchronous.coach.headline("Retry finding."), true);
+});

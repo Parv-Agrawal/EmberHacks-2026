@@ -1,4 +1,4 @@
-"""Phase 1 HTTP endpoints. Camera images remain entirely in the browser."""
+"""Session/workout endpoints and explicit Phase 3 exercise-image coaching."""
 from copy import deepcopy
 import hmac
 import secrets
@@ -12,6 +12,7 @@ from app.auth import (
     json_body, normalize_email, rate_limit, require_user, short_string, sign_in, store,
 )
 from app.workouts import CATALOG, confirm_workout, draft_workout
+from app.coach import decode_keyframe, generate_coaching, reports_pain, safety_feedback, validate_feedback, validate_summary
 
 main_bp = Blueprint("main", __name__)
 
@@ -123,3 +124,24 @@ def confirm_workout_draft():
     workout = confirm_workout(body["workout"], g.spotter_state.draft)
     g.spotter_state.confirmed = deepcopy(workout)
     return jsonify(workout=workout)
+
+
+@main_bp.post("/api/coach")
+@require_user
+def coach_set():
+    body = json_body({"set_summary", "user_feedback", "keyframe_image"})
+    feedback = validate_feedback(body["user_feedback"])
+    # Pain feedback is handled immediately, even if a failed frame/summary would
+    # otherwise block analysis. Never invoke the provider or delay safety for a limit.
+    if reports_pain(feedback):
+        result, source, reason = safety_feedback(), "safety", "pain_reported"
+    else:
+        rate_limit("coach", 10, 60)
+        summary = validate_summary(body["set_summary"], g.spotter_state.confirmed)
+        image_bytes = decode_keyframe(body["keyframe_image"])
+        result, source, reason = generate_coaching(summary, feedback, image_bytes, g.spotter_state.preferences)
+    response = jsonify(result.model_dump())
+    response.headers["X-Spotter-Coach-Source"] = source
+    if reason:
+        response.headers["X-Spotter-Coach-Reason"] = reason
+    return response

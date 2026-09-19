@@ -2100,3 +2100,151 @@ textarea::placeholder {
     width: 100%;
   }
 }
+
+/* Phase 3: an explicit post-set check-in and a reviewable next-set proposal. */
+.pain-button {
+  border: 1px solid #dab6a8;
+  background: #fff8f3;
+  color: #853e28;
+}
+.live-panel > .pain-button {
+  margin-top: 16px;
+}
+.coach-panel {
+  margin-top: 32px;
+  padding-top: 28px;
+  border-top: 1px solid var(--line);
+}
+.coach-intro {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 24px;
+}
+.coach-intro p,
+.adapt-panel > p {
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.7;
+}
+.coach-label {
+  font-size: 9px;
+  letter-spacing: 1px;
+  border-radius: 20px;
+  padding: 10px 14px;
+  background: var(--soft);
+  white-space: nowrap;
+}
+.feedback-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 20px 0;
+}
+.feedback-options .button {
+  padding: 12px 18px;
+}
+.feedback-label {
+  display: block;
+  font-size: 12px;
+  font-weight: 600;
+  margin: 18px 0 10px;
+}
+#coach-feedback {
+  width: 100%;
+  resize: vertical;
+  padding: 15px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--bg);
+  font: inherit;
+  font-size: 14px;
+  line-height: 1.7;
+}
+.coach-privacy {
+  color: var(--muted);
+  max-width: 850px;
+  font-size: 12px;
+  line-height: 1.8;
+}
+.coach-privacy .icon {
+  width: 14px;
+  height: 14px;
+  vertical-align: middle;
+  margin-right: 5px;
+}
+.coach-submit-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 18px 0;
+}
+.coach-result {
+  padding: 26px;
+  border-radius: 18px;
+  background: var(--soft);
+  margin-top: 24px;
+}
+.coach-result h3 {
+  font-family: "Manrope", sans-serif;
+  font-size: 23px;
+  line-height: 1.5;
+  margin: 16px 0;
+  letter-spacing: -0.6px;
+}
+.coach-tips {
+  padding-left: 20px;
+  margin: 14px 0;
+}
+.coach-tips li {
+  font-size: 14px;
+  line-height: 1.8;
+  margin: 8px 0;
+  padding-left: 5px;
+}
+.coach-encouragement {
+  font-size: 14px;
+  font-weight: 600;
+  margin: 20px 0 0;
+}
+.adapt-panel {
+  padding: 24px;
+  margin-top: 20px;
+  border: 1px solid #c9d68d;
+  border-radius: 18px;
+}
+.adapt-panel h3 {
+  margin: 12px 0;
+  font-size: 20px;
+}
+.adapt-panel .adapt-values {
+  color: var(--ink);
+  font-weight: 600;
+  font-size: 19px;
+}
+@media (max-width: 600px) {
+  .coach-intro {
+    flex-direction: column;
+    gap: 8px;
+  }
+  .coach-result,
+  .adapt-panel {
+    padding: 18px;
+  }
+  .coach-result h3 {
+    font-size: 19px;
+  }
+  .coach-submit-row .button {
+    width: 100%;
+  }
+  .feedback-options {
+    gap: 8px;
+  }
+  .feedback-options .button {
+    padding: 10px 12px;
+    font-size: 11px;
+  }
+  .coach-label {
+    font-size: 8px;
+  }
+}

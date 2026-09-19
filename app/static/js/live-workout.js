@@ -2,6 +2,8 @@ import { CameraCalibration, MAX_FRAME_AGE_MS } from "./calibration.js";
 import { MovementTracker } from "./movement.js";
 import { WorstRepBuffer } from "./keyframes.js";
 import { VoiceCoach } from "./voice-cues.js";
+import { CoachReview } from "./coach-review.js";
+import { reportsPain } from "./adaptation.js";
 
 const $ = (id) => document.getElementById(id);
 const clock = (ms) => {
@@ -12,9 +14,9 @@ const text = (id, value) => {
   if ($(id).textContent !== String(value)) $(id).textContent = value;
 };
 
-/** One active set and one completed-set preview; no persistence or network calls. */
+/** One active set and one review; only an explicit review sends a workout frame. */
 export class LiveWorkout {
-  constructor({ onExit }) {
+  constructor({ onExit, requestCoach }) {
     this.onExit = onExit;
     this.stage = "idle";
     this.frames = new WorstRepBuffer();
@@ -33,6 +35,13 @@ export class LiveWorkout {
         snapshotFrames: true,
       },
     );
+    this.review = new CoachReview({
+      requestCoach,
+      voice: this.voice,
+      onPain: () => this.stopForPain(),
+      onDecision: (proposal) => this.acceptProposal(proposal),
+    });
+    $("live-pain").addEventListener("click", () => this.stopForPain());
     $("live-enable").addEventListener("click", () => this.enableCamera());
     $("live-begin").addEventListener("click", () => this.begin());
     $("live-pause").addEventListener("click", () => this.pause());
@@ -57,15 +66,24 @@ export class LiveWorkout {
     this.workout = structuredClone(workout);
     this.exerciseIndex = 0;
     this.setIndex = 0;
+    this.blockedExercises = new Set();
     this.interval = setInterval(() => this.renderTime(), 200);
     this.prepare();
   }
 
   get exercise() {
-    return this.workout.exercises[this.exerciseIndex];
+    return this.activeExercise || this.workout.exercises[this.exerciseIndex];
   }
 
-  prepare() {
+  prepare(override = null) {
+    this.review.reset();
+    this.pendingAdaptation = null;
+    this.activeExercise = { ...this.workout.exercises[this.exerciseIndex] };
+    if (override) {
+      this.activeExercise.reps = override.reps;
+      this.activeExercise.rest_seconds = override.rest_seconds;
+    }
+    this.painStopped = false;
     this.stage = "preparing";
     this.cameraState = null;
     this.elapsed = 0;
@@ -144,7 +162,8 @@ export class LiveWorkout {
       this.stage !== "preparing" ||
       !this.cameraState?.ready ||
       performance.now() - this.camera.lastFrameAt > MAX_FRAME_AGE_MS ||
-      document.hidden
+      document.hidden ||
+      this.blockedExercises.has(this.exercise.id)
     )
       return;
     this.stage = "active";
@@ -230,7 +249,8 @@ export class LiveWorkout {
     this.tracker.invalidate();
     this.frames.discardPartial();
     const summary = this.tracker.summary();
-    this.restUntil = performance.now() + this.exercise.rest_seconds * 1000;
+    this.finishedAt = performance.now();
+    this.restUntil = this.finishedAt + this.exercise.rest_seconds * 1000;
     text("live-badge", "Camera is off");
     $("live-badge").classList.remove("ready");
     $("workout-placeholder").hidden = false;
@@ -262,6 +282,12 @@ export class LiveWorkout {
     );
     text("set-data", JSON.stringify(summary, null, 2));
     $("set-result").hidden = false;
+    this.review.open({
+      summary,
+      image: worst?.image || null,
+      exercise: this.exercise,
+      hasNextSet: !this.painStopped && this.setIndex + 1 < this.exercise.sets,
+    });
     text(
       "live-next",
       this.hasNext() ? "Prepare next set" : "Back to workout plan",
@@ -272,24 +298,73 @@ export class LiveWorkout {
 
   hasNext() {
     return (
-      this.setIndex + 1 < this.exercise.sets ||
+      (!this.painStopped && this.setIndex + 1 < this.exercise.sets) ||
       this.exerciseIndex + 1 < this.workout.exercises.length
     );
   }
 
   next() {
     if (this.stage !== "finished") return;
+    if (!this.painStopped && reportsPain($("coach-feedback").value)) {
+      this.stopForPain();
+      return;
+    }
     if (!this.hasNext()) {
       this.onExit();
       return;
     }
     if (performance.now() < this.restUntil) return;
-    if (this.setIndex + 1 < this.exercise.sets) this.setIndex += 1;
+    const sameExercise =
+      !this.painStopped && this.setIndex + 1 < this.exercise.sets;
+    const override = sameExercise
+      ? this.pendingAdaptation || this.exercise
+      : null;
+    if (sameExercise) this.setIndex += 1;
     else {
       this.exerciseIndex += 1;
       this.setIndex = 0;
     }
-    this.prepare();
+    this.prepare(override);
+  }
+
+  acceptProposal(proposal) {
+    if (this.stage !== "finished" || this.painStopped) return;
+    this.pendingAdaptation = proposal;
+    this.restUntil =
+      this.finishedAt +
+      (proposal?.rest_seconds ?? this.exercise.rest_seconds) * 1000;
+    this.renderTime();
+  }
+
+  stopForPain() {
+    if (!this.tracker || this.stage === "idle" || this.painStopped) return;
+    this.blockedExercises.add(this.exercise.id);
+    this.painStopped = true;
+    this.pendingAdaptation = null;
+    this.review.cancel();
+    this.voice.stop();
+    if (this.stage !== "finished") this.finish(false);
+    else this.camera.stop();
+    this.tracker.invalidate();
+    this.frames.discardPartial();
+    this.review.markPain();
+    text("live-badge", "Exercise stopped");
+    text("live-phase", "Stopped after pain report");
+    text("set-result-title", "This exercise is stopped.");
+    text(
+      "live-status",
+      "You reported pain. Remaining sets of this exercise are skipped for this workout.",
+    );
+    text(
+      "live-cue",
+      "Stop this movement. Take a break; you can end your workout here.",
+    );
+    text(
+      "live-next",
+      this.hasNext() ? "Skip to the next exercise" : "Back to workout plan",
+    );
+    this.renderControls();
+    this.renderTime();
   }
 
   renderVoice() {
@@ -331,6 +406,7 @@ export class LiveWorkout {
     $("live-pause").hidden = !["active", "preparing"].includes(this.stage);
     $("live-finish").hidden = !["active", "paused"].includes(this.stage);
     $("live-next").hidden = this.stage !== "finished";
+    $("live-pain").hidden = this.stage === "idle" || this.painStopped;
   }
 
   renderTime() {
@@ -350,7 +426,9 @@ export class LiveWorkout {
         "live-rest",
         this.hasNext()
           ? `Planned rest · ${clock(remaining)} remaining`
-          : "All planned sets have ended.",
+          : this.painStopped
+            ? "Remaining sets of this exercise were skipped."
+            : "All planned sets have ended.",
       );
       $("live-next").disabled = this.hasNext() && remaining > 0;
     }
@@ -358,11 +436,14 @@ export class LiveWorkout {
 
   dispose() {
     this.stage = "idle";
+    this.review?.reset();
     this.camera.stop();
     this.voice.stop();
     this.frames.clear();
     this.tracker = null;
     this.workout = null;
+    this.activeExercise = null;
+    this.pendingAdaptation = null;
     this.lastSnapshot = null;
     this.cameraState = null;
     clearInterval(this.interval);

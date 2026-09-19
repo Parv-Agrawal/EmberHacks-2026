@@ -798,7 +798,8 @@
             </div>
             <p class="camera-caption">
               <svg class="icon"><use href="#i-lock" /></svg> Movement images
-              stay in this page’s memory. Nothing is uploaded or saved to disk.
+              stay on this device until you request a Gemini review. Card images
+              are never shared.
             </p>
             <p id="live-placement" class="live-placement"></p>
           </div>
@@ -866,6 +867,13 @@
                 End this set
               </button>
             </div>
+            <button
+              id="live-pain"
+              class="button pain-button full"
+              type="button"
+            >
+              Stop · I feel pain
+            </button>
             <p class="field-hint">
               Counts and cues are camera estimates. If a movement feels
               uncomfortable, stop the set.
@@ -914,6 +922,116 @@
               </details>
             </div>
           </div>
+          <section
+            id="coach-panel"
+            class="coach-panel"
+            aria-labelledby="coach-title"
+            hidden
+          >
+            <div class="coach-intro">
+              <div>
+                <span class="eyebrow small">THE OTHER HALF OF THE PICTURE</span>
+                <h2 id="coach-title">How did that feel?</h2>
+                <p>
+                  Your experience helps put the camera’s estimates in context.
+                </p>
+              </div>
+              <span class="coach-label">POST-SET CHECK-IN</span>
+            </div>
+            <div
+              class="feedback-options"
+              role="group"
+              aria-label="Quick set feedback"
+            >
+              <button id="feedback-easy" class="button secondary" type="button">
+                Felt easy
+              </button>
+              <button
+                id="feedback-fatigue"
+                class="button secondary"
+                type="button"
+              >
+                Felt tired
+              </button>
+              <button
+                id="feedback-balance"
+                class="button secondary"
+                type="button"
+              >
+                Off-balance
+              </button>
+              <button
+                id="feedback-pain"
+                class="button pain-button"
+                type="button"
+              >
+                I felt pain · stop
+              </button>
+            </div>
+            <label class="feedback-label" for="coach-feedback"
+              >Tell us more, if you’d like</label
+            >
+            <textarea
+              id="coach-feedback"
+              rows="2"
+              maxlength="500"
+              placeholder="For example: I felt off-balance on rep 4."
+            ></textarea>
+            <p class="coach-privacy">
+              <svg class="icon"><use href="#i-lock" /></svg> Choosing “Review
+              set with Gemini” sends the displayed workout keyframe, set
+              measurements, your feedback, and selected workout preferences to
+              Google’s Gemini service. TCard images and account identifiers are
+              never included. You can continue with your current plan without a
+              review.
+            </p>
+            <div class="coach-submit-row">
+              <button id="coach-submit" class="button primary" type="button">
+                Review set with Gemini</button
+              ><button
+                id="coach-cancel"
+                class="button secondary"
+                type="button"
+                hidden
+              >
+                Cancel review
+              </button>
+            </div>
+            <p id="coach-status" class="status-text" role="status"></p>
+            <article
+              id="coach-result"
+              class="coach-result"
+              aria-labelledby="coach-headline"
+              hidden
+            >
+              <span id="coach-source" class="eyebrow small"></span>
+              <h3 id="coach-headline"></h3>
+              <ol class="coach-tips">
+                <li id="coach-tip-one"></li>
+                <li id="coach-tip-two"></li>
+              </ol>
+              <p id="coach-encouragement" class="coach-encouragement"></p>
+            </article>
+            <article
+              id="adapt-panel"
+              class="adapt-panel"
+              aria-labelledby="adapt-title"
+              hidden
+            >
+              <span class="eyebrow small">YOUR NEXT SET · YOUR CHOICE</span>
+              <h3 id="adapt-title">A small adjustment?</h3>
+              <p id="adapt-values" class="adapt-values"></p>
+              <p id="adapt-reason"></p>
+              <div class="coach-submit-row">
+                <button id="adapt-accept" class="button primary" type="button">
+                  Accept for next set</button
+                ><button id="adapt-keep" class="button secondary" type="button">
+                  Keep current plan
+                </button>
+              </div>
+              <p id="adapt-status" class="field-hint" role="status"></p>
+            </article>
+          </section>
         </section>
       </section>
     </main>

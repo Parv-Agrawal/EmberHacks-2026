@@ -34,15 +34,7 @@ export class VoiceCoach {
   }
 
   cue(text, { key = text } = {}) {
-    if (
-      !this.supported ||
-      !this.enabled ||
-      this.disposed ||
-      typeof text !== "string" ||
-      !text.trim() ||
-      this.active
-    )
-      return false;
+    if (!this.#canSpeak(text) || this.active) return false;
     const now = this.now();
     if (
       !Number.isFinite(now) ||
@@ -57,13 +49,35 @@ export class VoiceCoach {
     }
     if (this.recent.has(key)) return false;
 
+    return this.#speak(text, now, { key, deduplicate: true });
+  }
+
+  /** Post-set findings replace stale cues and are delivered without an in-set delay. */
+  headline(text) {
+    if (!this.#canSpeak(text)) return false;
+    const now = this.now();
+    if (!Number.isFinite(now) || !this.stop()) return false;
+    return this.#speak(text, now);
+  }
+
+  #canSpeak(text) {
+    return (
+      this.supported &&
+      this.enabled &&
+      !this.disposed &&
+      typeof text === "string" &&
+      Boolean(text.trim())
+    );
+  }
+
+  #speak(text, now, { key, deduplicate = false } = {}) {
     let utterance;
     let failed = false;
     const finish = (isError = false) => {
       if (this.active !== utterance) return;
       failed = isError;
       this.active = null;
-      if (isError) this.recent.delete(key);
+      if (isError && deduplicate) this.recent.delete(key);
       utterance.onstart = null;
       utterance.onend = null;
       utterance.onerror = null;
@@ -83,7 +97,7 @@ export class VoiceCoach {
       this.active = utterance;
       // Also throttle browsers that omit the start event or reject speech later.
       this.lastSubmittedAt = now;
-      this.recent.set(key, now);
+      if (deduplicate) this.recent.set(key, now);
       this.synthesis.speak(utterance);
     } catch {
       if (utterance) finish(true);
@@ -147,8 +161,10 @@ export class VoiceCoach {
     }
     try {
       this.synthesis?.cancel();
+      return true;
     } catch {
       // Speech is optional; cancellation errors cannot stop workout controls.
+      return false;
     }
   }
 

@@ -73,7 +73,7 @@ function canvas() {
 
 // Camera and speech are device boundaries. The controller, movement state
 // machine, keyframe buffer, and displayed results remain the production code.
-function fixture(t, workout = plan()) {
+function fixture(t, workout = plan(), { requestCoach } = {}) {
   let now = 1000;
   let exits = 0;
   const elements = new Map();
@@ -95,6 +95,7 @@ function fixture(t, workout = plan()) {
   });
   t.mock.method(performance, "now", () => now);
   const live = new LiveWorkout({
+    requestCoach,
     onExit: () => {
       exits += 1;
     },
@@ -128,9 +129,13 @@ function fixture(t, workout = plan()) {
     stops: 0,
     resets: 0,
     cues: [],
+    headlines: [],
     milestones: [],
     cue(message, options) {
       this.cues.push({ message, options });
+    },
+    headline(message) {
+      this.headlines.push(message);
     },
     milestone(...args) {
       this.milestones.push(args);
@@ -147,6 +152,7 @@ function fixture(t, workout = plan()) {
   };
   live.camera = camera;
   live.voice = voice;
+  live.review.voice = voice;
   t.after(() => {
     live.dispose();
     if (savedDocument)
@@ -235,6 +241,15 @@ function fixture(t, workout = plan()) {
     },
     now: () => now,
     exits: () => exits,
+    click(id) {
+      get(id).dispatchEvent(new Event("click"));
+    },
+    input(value, { committed = false } = {}) {
+      get("coach-feedback").value = value;
+      get("coach-feedback").dispatchEvent(
+        new Event(committed ? "change" : "input"),
+      );
+    },
     start() {
       ready();
       live.begin();
@@ -482,3 +497,312 @@ test("disposal removes captured images, measurements, the plan, and the running 
   f.live.onFrame({ now: f.now() + 100 });
   assert.equal(f.get("set-data").textContent, "");
 });
+
+const adaptivePlan = () => ({
+  exercises: [
+    { id: "squat", name: "Squats", sets: 3, reps: 8, rest_seconds: 60 },
+    {
+      id: "bicep_curl",
+      name: "Bicep curls",
+      sets: 2,
+      reps: 8,
+      rest_seconds: 60,
+    },
+  ],
+});
+
+function completeSet(f) {
+  f.start();
+  const target = f.live.exercise.reps;
+  for (let index = 0; index < target; index++) f.rep();
+  assert.equal(f.live.stage, "finished");
+}
+
+function deferredReview() {
+  let resolve;
+  const promise = new Promise((done) => {
+    resolve = done;
+  });
+  const requests = [];
+  return {
+    requests,
+    resolve,
+    requestCoach(body, signal) {
+      requests.push({ body, signal });
+      return promise;
+    },
+  };
+}
+
+const coachResponse = () => ({
+  source: "gemini",
+  feedback: {
+    headline:
+      "Eight measured reps were controlled; you reported that they felt easy.",
+    tips: [
+      "Keep the same steady pace.",
+      "Keep both knees visible to the camera.",
+    ],
+    encouragement: "Nice work finishing the set.",
+  },
+});
+
+test("a pain stop during movement immediately ends the exercise and skips its remaining sets only after an explicit next action", async (t) => {
+  const f = fixture(t, adaptivePlan());
+  f.start();
+  f.rep();
+  f.feed([140, 135, 120, 90]);
+  assert.ok(f.live.frames.candidate);
+  const cameraStops = f.camera.stops;
+  const voiceStops = f.voice.stops;
+  f.click("live-pain");
+  assert.equal(f.live.stage, "finished");
+  assert.equal(f.live.painStopped, true);
+  assert.equal(f.live.blockedExercises.has("squat"), true);
+  assert.ok(f.camera.stops > cameraStops);
+  assert.ok(f.voice.stops > voiceStops);
+  assert.equal(f.get("workout-video").srcObject, null);
+  assert.equal(f.live.frames.candidate, null);
+  assert.equal(f.live.tracker.summary().completed_reps, 1);
+  assert.equal(f.live.review.stopped, true);
+  assert.equal(f.get("coach-submit").disabled, true);
+  assert.equal(f.get("adapt-panel").hidden, true);
+  assert.equal(f.get("live-begin").hidden, true);
+  assert.equal(f.get("live-pain").hidden, true);
+  assert.match(f.get("live-status").textContent, /Remaining sets.*skipped/);
+  assert.match(f.get("live-next").textContent, /Skip to the next exercise/);
+
+  const elapsed = f.live.elapsed;
+  const starts = f.camera.starts.length;
+  await f.live.enableCamera();
+  f.live.begin();
+  f.rep();
+  assert.equal(f.camera.starts.length, starts);
+  assert.equal(f.live.stage, "finished");
+  assert.equal(f.live.tracker.summary().completed_reps, 1);
+  assert.equal(f.live.elapsed, elapsed);
+  f.live.next();
+  assert.equal(f.live.exerciseIndex, 0, "rest still gates moving on");
+  f.at(f.live.restUntil);
+  f.live.renderTime();
+  assert.equal(
+    f.live.exerciseIndex,
+    0,
+    "rest ending never starts an exercise automatically",
+  );
+  f.live.next();
+  assert.equal(f.live.stage, "preparing");
+  assert.equal(f.live.exerciseIndex, 1);
+  assert.equal(f.live.setIndex, 0);
+  assert.equal(f.live.exercise.id, "bicep_curl");
+  assert.equal(f.live.painStopped, false);
+  assert.equal(f.live.blockedExercises.has("squat"), true);
+  assert.equal(f.live.review.context, null);
+  assert.equal(f.get("coach-panel").hidden, true);
+});
+
+test("committed pain during an in-flight review aborts HTTP and speech immediately and rejects a late model result", async (t) => {
+  const transport = deferredReview();
+  const f = fixture(t, adaptivePlan(), transport);
+  completeSet(f);
+  f.click("feedback-easy");
+  const submission = f.live.review.submit();
+  assert.equal(transport.requests.length, 1);
+  const { body, signal } = transport.requests[0];
+  assert.equal(body.set_summary.completed_reps, 8);
+  assert.equal(body.keyframe_image, f.live.frames.worst.image);
+  assert.equal(signal.aborted, false);
+  assert.equal(f.live.review.pending, true);
+  const voiceStops = f.voice.stops;
+  const cameraStops = f.camera.stops;
+  f.input("No pain before, now my knee hurts", { committed: true });
+  assert.equal(f.live.painStopped, true);
+  assert.equal(f.live.review.stopped, true);
+  assert.equal(f.live.review.pending, false);
+  assert.equal(signal.aborted, true);
+  assert.ok(f.voice.stops > voiceStops);
+  assert.ok(f.camera.stops > cameraStops);
+  assert.equal(f.live.pendingAdaptation, null);
+  const stoppedMessage = f.get("coach-status").textContent;
+  transport.resolve(coachResponse());
+  await submission;
+  assert.equal(f.get("coach-status").textContent, stoppedMessage);
+  assert.equal(f.get("coach-result").hidden, true);
+  assert.deepEqual(f.voice.headlines, []);
+  assert.equal(f.live.stage, "finished");
+});
+
+test("next-set navigation rechecks an uncommitted pain report instead of starting another set", (t) => {
+  const f = fixture(t, adaptivePlan());
+  completeSet(f);
+  f.click("feedback-easy");
+  f.click("adapt-accept");
+  assert.equal(f.live.pendingAdaptation.reps, 9);
+  f.get("coach-feedback").value = "My shoulder hurts";
+  f.at(f.live.restUntil);
+  f.live.next();
+  assert.equal(f.live.painStopped, true);
+  assert.equal(f.live.stage, "finished");
+  assert.equal(f.live.setIndex, 0);
+  assert.equal(f.live.exerciseIndex, 0);
+  assert.equal(f.live.pendingAdaptation, null);
+  assert.equal(f.get("adapt-panel").hidden, true);
+});
+
+test("adaptation requires explicit acceptance, updates subsequent sets, and keeps the source workout unchanged", (t) => {
+  const workout = adaptivePlan();
+  const original = structuredClone(workout);
+  const f = fixture(t, workout);
+  completeSet(f);
+  const originalRestUntil = f.live.restUntil;
+  f.click("feedback-easy");
+  assert.equal(f.live.review.proposal.kind, "increase");
+  assert.equal(f.live.review.proposal.reps, 9);
+  assert.equal(f.live.pendingAdaptation, null);
+  assert.equal(f.live.exercise.reps, 8);
+  assert.equal(f.live.restUntil, originalRestUntil);
+  f.click("adapt-accept");
+  assert.equal(f.live.pendingAdaptation.reps, 9);
+  assert.equal(
+    f.live.exercise.reps,
+    8,
+    "the finished set's target is immutable",
+  );
+  assert.equal(f.live.tracker.summary().target_reps, 8);
+  assert.deepEqual(f.live.workout, original);
+  assert.deepEqual(workout, original);
+  f.at(f.live.restUntil);
+  f.live.next();
+  assert.equal(f.live.exercise.reps, 9);
+  assert.equal(f.live.tracker.summary().target_reps, 9);
+  assert.equal(String(f.get("live-target").textContent), "9");
+  assert.equal(f.live.setIndex, 1);
+  assert.equal(f.live.pendingAdaptation, null);
+  assert.equal(f.live.review.context, null);
+  assert.deepEqual(f.live.workout, original);
+
+  // The accepted target becomes the current plan for this exercise.
+  f.live.finish(false);
+  f.at(f.live.restUntil);
+  f.live.next();
+  assert.equal(f.live.setIndex, 2);
+  assert.equal(f.live.exercise.reps, 9);
+  assert.equal(f.live.exercise.rest_seconds, 60);
+});
+
+test("accepting extra rest updates the existing countdown; declining or editing restores the original plan", (t) => {
+  const f = fixture(t, adaptivePlan());
+  completeSet(f);
+  const originalRestUntil = f.live.restUntil;
+  f.at(f.live.finishedAt + 20000);
+  f.click("feedback-fatigue");
+  assert.equal(f.live.review.proposal.rest_seconds, 90);
+  assert.equal(f.live.restUntil, originalRestUntil);
+  f.click("adapt-accept");
+  assert.equal(f.live.restUntil, f.live.finishedAt + 90000);
+  assert.match(f.get("live-rest").textContent, /1:10 remaining/);
+  f.click("adapt-keep");
+  assert.equal(f.live.pendingAdaptation, null);
+  assert.equal(f.live.restUntil, originalRestUntil);
+  assert.match(f.get("live-rest").textContent, /0:40 remaining/);
+
+  f.click("adapt-accept");
+  f.input("I felt off-balance");
+  assert.equal(
+    f.live.pendingAdaptation,
+    null,
+    "editing invalidates earlier acceptance",
+  );
+  assert.equal(f.live.restUntil, originalRestUntil);
+  assert.equal(f.live.review.proposal.reps, 6);
+  f.click("adapt-keep");
+  f.at(f.live.restUntil);
+  f.live.next();
+  assert.equal(f.live.exercise.reps, 8);
+  assert.equal(f.live.exercise.rest_seconds, 60);
+});
+
+test("an accepted balance adjustment carries both reps and rest into the next set", (t) => {
+  const f = fixture(t, adaptivePlan());
+  completeSet(f);
+  f.click("feedback-balance");
+  f.click("adapt-accept");
+  assert.equal(f.live.restUntil, f.live.finishedAt + 90000);
+  f.at(f.live.finishedAt + 60000);
+  f.live.next();
+  assert.equal(
+    f.live.stage,
+    "finished",
+    "the original rest duration is insufficient after acceptance",
+  );
+  f.at(f.live.restUntil);
+  f.live.next();
+  assert.equal(f.live.exercise.reps, 6);
+  assert.equal(f.live.exercise.rest_seconds, 90);
+  assert.equal(f.live.tracker.summary().target_reps, 6);
+  assert.equal(f.live.workout.exercises[0].reps, 8);
+  assert.equal(f.live.workout.exercises[0].rest_seconds, 60);
+});
+
+test("keeping the current plan preserves an accepted reduction through later sets and resets for a different exercise", (t) => {
+  const f = fixture(t, adaptivePlan());
+  completeSet(f);
+  f.click("feedback-balance");
+  f.click("adapt-accept");
+  f.at(f.live.restUntil);
+  f.live.next();
+  assert.equal(f.live.setIndex, 1);
+  assert.equal(f.live.exercise.reps, 6);
+  assert.equal(f.live.exercise.rest_seconds, 90);
+  completeSet(f);
+  f.click("feedback-easy");
+  assert.equal(f.live.review.proposal.reps, 7);
+  f.click("adapt-keep");
+  assert.equal(f.live.pendingAdaptation, null);
+  assert.equal(f.live.restUntil, f.live.finishedAt + 90000);
+  f.at(f.live.restUntil);
+  f.live.next();
+  assert.equal(f.live.setIndex, 2);
+  assert.equal(f.live.exercise.reps, 6);
+  assert.equal(f.live.exercise.rest_seconds, 90);
+  assert.equal(f.live.tracker.summary().target_reps, 6);
+
+  f.live.finish(false);
+  f.at(f.live.restUntil);
+  f.live.next();
+  assert.equal(f.live.exerciseIndex, 1);
+  assert.equal(f.live.exercise.id, "bicep_curl");
+  assert.equal(f.live.exercise.reps, 8);
+  assert.equal(f.live.exercise.rest_seconds, 60);
+  assert.equal(f.live.setIndex, 0);
+});
+
+for (const action of ["next set", "dispose"]) {
+  test(`${action} clears review data, cancels pending HTTP, and ignores late feedback`, async (t) => {
+    const transport = deferredReview();
+    const f = fixture(t, adaptivePlan(), transport);
+    completeSet(f);
+    f.click("feedback-easy");
+    const submission = f.live.review.submit();
+    const signal = transport.requests[0].signal;
+    assert.equal(signal.aborted, false);
+    if (action === "next set") {
+      f.at(f.live.restUntil);
+      f.live.next();
+      assert.equal(f.live.stage, "preparing");
+      assert.equal(f.live.setIndex, 1);
+    } else f.live.dispose();
+    assert.equal(signal.aborted, true);
+    assert.equal(f.live.review.pending, false);
+    assert.equal(f.live.review.context, null);
+    assert.equal(f.get("coach-feedback").value, "");
+    assert.equal(f.get("coach-panel").hidden, true);
+    assert.equal(f.get("coach-headline").textContent, "");
+    transport.resolve(coachResponse());
+    await submission;
+    assert.equal(f.get("coach-panel").hidden, true);
+    assert.equal(f.get("coach-result").hidden, true);
+    assert.equal(f.get("coach-headline").textContent, "");
+    assert.deepEqual(f.voice.headlines, []);
+  });
+}

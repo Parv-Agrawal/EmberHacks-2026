@@ -13,7 +13,7 @@ status.textContent =
   "DEVELOPER FIXTURE · Synthetic poses, not webcam evidence. Choose a movement test.";
 banner.append(status);
 document.body.prepend(banner);
-const workout = new LiveWorkout({
+export const workout = new LiveWorkout({
   onExit: () => {
     workout.dispose();
     status.textContent = "Fixture cleared. Choose a movement test.";

@@ -1,4 +1,4 @@
-"""Flask application factory for the Phase 1 browser-camera demo."""
+"""Flask application factory for the browser-camera demo."""
 from datetime import timedelta
 import hmac
 import os
@@ -37,6 +37,11 @@ def create_app(test_config=None):
 
     @app.before_request
     def protect_api():
+        # Flask's per-request limit keeps the original sign-in/intake boundary.
+        # Only the coach endpoint accepts a small, explicitly submitted exercise JPEG.
+        if request.path == "/api/coach" and request.method == "POST":
+            from app.coach import MAX_COACH_BODY_BYTES
+            request.max_content_length = MAX_COACH_BODY_BYTES
         if not request.path.startswith("/api/") or request.method in {"GET", "HEAD", "OPTIONS"}:
             return None
         if request.headers.get("Sec-Fetch-Site") == "cross-site":
