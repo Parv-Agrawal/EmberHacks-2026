@@ -1,0 +1,336 @@
+<aside class="emergency-rail" aria-label="Spotter emergency demo controls">
+  <div class="emergency-rail-profile">
+    <button
+      id="emergency-profile-open"
+      class="emergency-profile-trigger"
+      type="button"
+    >
+      Emergency profile
+    </button>
+    <span id="ep-profile-status" role="status">No profile saved</span>
+  </div>
+  <div class="emergency-rail-sos">
+    <button
+      id="spotter-sos"
+      class="button emergency-button"
+      type="button"
+      aria-haspopup="dialog"
+    >
+      <span aria-hidden="true">+</span> SOS · Demo
+    </button>
+    <span>No real calls</span>
+  </div>
+</aside>
+
+<dialog
+  id="emergency-profile-dialog"
+  class="emergency-dialog"
+  aria-labelledby="ep-title"
+  aria-describedby="ep-privacy"
+>
+  <div class="emergency-dialog-heading">
+    <span class="emergency-demo-badge">SIMULATION / DEMO MODE</span>
+    <h2 id="ep-title" tabindex="-1">Your emergency profile.</h2>
+    <p>Prepare the details you want included in a simulated handoff.</p>
+    <button id="ep-sos" class="button emergency-button" type="button">
+      SOS · Start demo now
+    </button>
+  </div>
+  <div id="ep-privacy" class="emergency-notice">
+    This profile stays in this page’s memory and clears on reload or sign-out.
+    It is never sent to AI. Contact details appear only in your briefing;
+    Spotter never calls or messages those contacts.
+  </div>
+  <form
+    id="emergency-profile-form"
+    class="emergency-profile-form"
+    autocomplete="off"
+  >
+    <fieldset>
+      <legend>About you <span>Required details</span></legend>
+      <div class="emergency-form-grid">
+        <div>
+          <label for="ep-name">Your name</label>
+          <input
+            id="ep-name"
+            name="name"
+            type="text"
+            maxlength="80"
+            autocomplete="off"
+            required
+          />
+        </div>
+        <div>
+          <label for="ep-callback">Callback number</label>
+          <input
+            id="ep-callback"
+            name="callback"
+            type="tel"
+            maxlength="40"
+            autocomplete="off"
+            required
+          />
+        </div>
+        <div class="emergency-wide">
+          <label for="ep-language">Preferred language</label>
+          <input
+            id="ep-language"
+            name="language"
+            type="text"
+            maxlength="60"
+            value="English"
+            autocomplete="off"
+            required
+          />
+        </div>
+        <div class="emergency-wide">
+          <label for="ep-location">Your physical location</label>
+          <textarea
+            id="ep-location"
+            name="location"
+            rows="2"
+            maxlength="240"
+            placeholder="Building, street address, floor, room, and city"
+            aria-describedby="ep-location-hint"
+            required
+          ></textarea>
+          <p id="ep-location-hint" class="field-hint">
+            Enter enough detail for someone to find you. Location is never
+            inferred from your camera.
+          </p>
+        </div>
+      </div>
+      <label class="emergency-check" for="ep-location-confirmed">
+        <input
+          id="ep-location-confirmed"
+          name="location_confirmed"
+          type="checkbox"
+          required
+        />
+        <span>I confirm this is my current physical location.</span>
+      </label>
+    </fieldset>
+
+    <fieldset>
+      <legend>Medical details <span>Optional · self-reported</span></legend>
+      <p class="field-hint">
+        Only enter information you know. Spotter does not diagnose conditions or
+        recommend treatments.
+      </p>
+      <div class="emergency-form-grid">
+        <div class="emergency-wide">
+          <label for="ep-conditions">Reported conditions</label>
+          <textarea
+            id="ep-conditions"
+            name="conditions"
+            rows="2"
+            maxlength="500"
+            placeholder="Any conditions you want included"
+          ></textarea>
+        </div>
+        <div class="emergency-wide">
+          <label for="ep-medications">Medications and doses</label>
+          <textarea
+            id="ep-medications"
+            name="medications"
+            rows="2"
+            maxlength="500"
+            placeholder="Only medications and doses you can confirm"
+            aria-describedby="ep-medications-hint"
+          ></textarea>
+          <p id="ep-medications-hint" class="field-hint">
+            Unconfirmed medication details are excluded from the briefing.
+          </p>
+          <label class="emergency-check" for="ep-medications-confirmed">
+            <input
+              id="ep-medications-confirmed"
+              name="medications_confirmed"
+              type="checkbox"
+            />
+            <span
+              >I confirm these medication names and doses are accurate.</span
+            >
+          </label>
+        </div>
+        <div class="emergency-wide">
+          <label for="ep-allergies">Reported allergies</label>
+          <textarea
+            id="ep-allergies"
+            name="allergies"
+            rows="2"
+            maxlength="500"
+            placeholder="Any allergies you want included"
+          ></textarea>
+        </div>
+      </div>
+      <label class="emergency-check" for="ep-share-medical">
+        <input id="ep-share-medical" name="share_medical" type="checkbox" />
+        <span
+          >I approve including these medical details in this page’s simulated
+          briefing.</span
+        >
+      </label>
+    </fieldset>
+
+    <fieldset>
+      <legend>Emergency contact <span>Optional · briefing only</span></legend>
+      <div class="emergency-form-grid">
+        <div>
+          <label for="ep-contact-name">Contact name</label>
+          <input
+            id="ep-contact-name"
+            name="contact_name"
+            type="text"
+            maxlength="80"
+            autocomplete="off"
+          />
+        </div>
+        <div>
+          <label for="ep-contact-phone">Contact phone</label>
+          <input
+            id="ep-contact-phone"
+            name="contact_phone"
+            type="tel"
+            maxlength="40"
+            autocomplete="off"
+          />
+        </div>
+      </div>
+      <p class="field-hint">
+        This person will not receive a call, message, or notification.
+      </p>
+    </fieldset>
+
+    <fieldset>
+      <legend>Demo destination <span>Allowlisted test recipient</span></legend>
+      <label for="ep-recipient">Simulated handoff recipient</label>
+      <select
+        id="ep-recipient"
+        name="recipient"
+        aria-describedby="ep-recipient-hint"
+      ></select>
+      <p id="ep-recipient-hint" class="field-hint">
+        Only fictitious, allowlisted test recipients are available. The entire
+        handoff runs in this page; nothing is sent.
+      </p>
+    </fieldset>
+
+    <p
+      id="ep-errors"
+      class="notice error"
+      role="alert"
+      tabindex="-1"
+      hidden
+    ></p>
+    <div class="emergency-dialog-actions">
+      <button id="ep-save" class="button primary" type="submit">
+        Save profile for this visit
+      </button>
+      <button id="ep-close" class="button secondary" type="button">
+        Close
+      </button>
+      <button id="ep-clear" class="emergency-text-button" type="button">
+        Clear profile
+      </button>
+    </div>
+  </form>
+</dialog>
+
+<dialog
+  id="sos-dialog"
+  class="emergency-dialog sos-dialog"
+  aria-labelledby="sos-title"
+  aria-describedby="sos-demo-notice"
+>
+  <div class="emergency-dialog-heading">
+    <span class="emergency-demo-badge">SIMULATION / DEMO MODE</span>
+    <h2 id="sos-title" tabindex="-1">Spotter SOS demo.</h2>
+    <p>Your workout is stopped. A simulated handoff begins immediately.</p>
+  </div>
+  <div id="sos-demo-notice" class="emergency-notice emergency-notice-strong">
+    <strong
+      >No real call or message is sent. No emergency responder is
+      notified.</strong
+    >
+    <span
+      >If you need real help, ask someone nearby or use your phone to contact
+      local emergency services.</span
+    >
+  </div>
+
+  <section class="sos-connection" aria-labelledby="sos-connection-title">
+    <div class="sos-connection-heading">
+      <h3 id="sos-connection-title">Demo connection</h3>
+      <span class="emergency-demo-badge">LOCAL SIMULATION</span>
+    </div>
+    <p id="sos-status" class="sos-status" role="status" aria-live="polite">
+      Preparing simulated handoff…
+    </p>
+    <p id="sos-recipient" class="field-hint"></p>
+    <ol
+      id="sos-timeline"
+      class="sos-timeline"
+      aria-label="Simulated handoff progress"
+    ></ol>
+  </section>
+
+  <section class="sos-check-in" aria-labelledby="sos-check-in-title">
+    <h3 id="sos-check-in-title">Your check-in</h3>
+    <label for="sos-check-in">Can you respond?</label>
+    <select id="sos-check-in">
+      <option value="Not answered">Not answered</option>
+      <option value="I can respond">I can respond</option>
+      <option value="I need assistance">I need assistance</option>
+    </select>
+    <label class="sos-field-label" for="sos-reason"
+      >Reason for alert (optional)</label
+    >
+    <textarea
+      id="sos-reason"
+      rows="2"
+      maxlength="240"
+      placeholder="In your own words"
+    ></textarea>
+    <button id="sos-update" class="button secondary" type="button">
+      Update briefing
+    </button>
+    <label class="sos-field-label" for="sos-location"
+      >Current physical location</label
+    >
+    <input
+      id="sos-location"
+      type="text"
+      maxlength="240"
+      placeholder="Address, building, floor, room, and city"
+      autocomplete="off"
+      aria-describedby="sos-location-status"
+    />
+    <p id="sos-location-status" class="field-hint">
+      Location has not been confirmed for this alert.
+    </p>
+    <button id="sos-location-confirm" class="button secondary" type="button">
+      Confirm this location
+    </button>
+    <p class="field-hint">
+      The simulation starts without waiting for your check-in.
+    </p>
+  </section>
+
+  <section class="sos-briefing-section" aria-labelledby="sos-briefing-title">
+    <h3 id="sos-briefing-title">Simulated handoff briefing</h3>
+    <p class="field-hint">
+      Your entered details and check-in only. No AI analysis or medical
+      interpretation.
+    </p>
+    <dl id="sos-briefing" class="sos-briefing"></dl>
+  </section>
+
+  <div class="emergency-dialog-actions">
+    <button id="sos-cancel" class="button emergency-button" type="button">
+      Cancel simulation
+    </button>
+    <button id="sos-close" class="button secondary" type="button">
+      Close demo
+    </button>
+  </div>
+</dialog>

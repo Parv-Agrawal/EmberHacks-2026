@@ -1,3 +1,4 @@
+import { EmergencyAssistant } from "./emergency-assistant.js";
 import { LiveWorkout } from "./live-workout.js";
 import { BarcodeScanner } from "./barcode.js";
 import { CameraCalibration, MAX_FRAME_AGE_MS } from "./calibration.js";
@@ -138,6 +139,7 @@ function showView(view, { focus = true } = {}) {
 
 function setUser(user) {
   state.user = user;
+  emergency.setUser(user);
   $("sign-out").hidden = !user;
   if (user) {
     const firstName = user.name.split(" ")[0];
@@ -408,6 +410,7 @@ $("change-email").addEventListener("click", () => {
   notice("signin-error");
 });
 $("sign-out").addEventListener("click", (event) => {
+  emergency.clear();
   scanner.stop();
   calibration.stop();
   liveWorkout.dispose();
@@ -660,6 +663,7 @@ $("finish-calibration").addEventListener("click", () => {
   showView("ready");
 });
 const liveWorkout = new LiveWorkout({
+  onHelp: (context) => emergency.trigger(context),
   requestCoach: (payload, signal) =>
     api("/api/coach", payload, { signal, coach: true }),
   onExit: () => {
@@ -667,11 +671,37 @@ const liveWorkout = new LiveWorkout({
     showView("plan");
   },
 });
+const emergency = new EmergencyAssistant({
+  onPause: () => {
+    scanner.stop();
+    calibration.stop();
+    liveWorkout.commands.stop();
+    liveWorkout.review.cancel();
+    liveWorkout.pause();
+    liveWorkout.voice.stop();
+    liveWorkout.sessionSummary.replay.pause();
+  },
+  onStop: () => {
+    const reason =
+      liveWorkout.workout && !["idle", "summary"].includes(liveWorkout.stage)
+        ? `User requested help during ${liveWorkout.exercise.name}, set ${liveWorkout.setIndex + 1}. ${liveWorkout.tracker?.summary().completed_reps || 0} completed reps measured.`
+        : "User requested help from Spotter";
+    scanner.stop();
+    calibration.stop();
+    liveWorkout.commands.stop();
+    liveWorkout.review.cancel();
+    liveWorkout.voice.stop();
+    liveWorkout.sessionSummary.replay.pause();
+    liveWorkout.endSession();
+    return { reason };
+  },
+});
 $("ready-start").addEventListener("click", () => {
   showView("workout");
   liveWorkout.open(state.workout);
 });
 window.addEventListener("pagehide", () => {
+  emergency.clear();
   liveWorkout.dispose();
   scanner.stop();
   calibration.stop();

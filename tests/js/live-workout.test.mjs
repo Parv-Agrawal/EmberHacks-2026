@@ -85,7 +85,7 @@ function canvas() {
 
 // Camera and speech are device boundaries. The controller, movement state
 // machine, keyframe buffer, and displayed results remain the production code.
-function fixture(t, workout = plan(), { requestCoach } = {}) {
+function fixture(t, workout = plan(), { requestCoach, onHelp } = {}) {
   let now = 1000;
   let exits = 0;
   const elements = new Map();
@@ -108,6 +108,7 @@ function fixture(t, workout = plan(), { requestCoach } = {}) {
   t.mock.method(performance, "now", () => now);
   const live = new LiveWorkout({
     requestCoach,
+    onHelp,
     onExit: () => {
       exits += 1;
     },
@@ -1021,6 +1022,106 @@ test("help during review cancels pending analysis and a late result cannot repla
   assert.equal(f.get("coach-result").hidden, true);
   assert.deepEqual(f.voice.headlines, []);
   assert.equal(f.live.history.sets[0].coaching, null);
+});
+
+test("injected voice SOS passes only its trigger and can synchronously stop tracking before late frames", async (t) => {
+  const transport = deferredReview();
+  const contexts = [];
+  const workout = {
+    ...adaptivePlan(),
+    card: { barcode: "2176123456789100", utorid: "leeterry" },
+    profile: { name: "Private profile", medications: "Private details" },
+  };
+  const f = fixture(t, workout, {
+    ...transport,
+    onHelp(context) {
+      contexts.push(context);
+      f.live.endSession();
+    },
+  });
+  const network = t.mock.method(globalThis, "fetch", async () => {
+    throw new Error("The SOS bridge must not send an outbound request.");
+  });
+  f.start();
+  f.rep();
+  f.feed([140, 135, 120, 90]);
+  assert.ok(f.live.frames.candidate);
+  f.live.commands.enabled = true;
+  const dispatch = f.live.handleCommand({
+    type: "help",
+    text: "Call for help. Private spoken information.",
+  });
+
+  // The host's stop callback runs before handleCommand yields its promise.
+  assert.equal(f.live.stage, "summary");
+  assert.deepEqual(contexts, [{ trigger: "voice" }]);
+  assert.equal(f.live.commands.enabled, false);
+  assert.equal(f.get("workout-video").srcObject, null);
+  assert.equal(f.live.frames.candidate, null);
+  assert.equal(f.live.frames.worst, null);
+  assert.equal(f.live.tracker, null);
+  assert.equal(f.live.interval, null);
+  assert.equal(f.get("summary-reps").textContent, 1);
+  assert.equal(f.get("summary-help").hidden, true);
+  assert.equal(f.get("set-data").textContent, "");
+  assert.equal(f.get("worst-keyframe").src, undefined);
+  assert.equal(f.live.review.context, null);
+
+  const history = f.live.history.sets;
+  const count = f.get("live-count").textContent;
+  f.rep();
+  await f.live.handleCommand({ type: "resume" });
+  await dispatch;
+  assert.equal(f.live.stage, "summary");
+  assert.deepEqual(f.live.history.sets, history);
+  assert.equal(f.get("live-count").textContent, count);
+  assert.equal(transport.requests.length, 0);
+  assert.equal(network.mock.callCount(), 0);
+  assert.equal(contexts.length, 1);
+});
+
+test("injected SOS button passes only its trigger and cancels pending coaching before a late response", async (t) => {
+  const transport = deferredReview();
+  const contexts = [];
+  const f = fixture(t, adaptivePlan(), {
+    ...transport,
+    onHelp(context) {
+      contexts.push(context);
+      f.live.endSession();
+    },
+  });
+  const network = t.mock.method(globalThis, "fetch", async () => {
+    throw new Error("The SOS bridge must not send an outbound request.");
+  });
+  completeSet(f);
+  f.click("feedback-easy");
+  const submission = f.live.review.submit();
+  assert.equal(transport.requests.length, 1);
+  assert.equal(transport.requests[0].signal.aborted, false);
+  f.live.commands.enabled = true;
+  f.click("live-help");
+
+  assert.deepEqual(contexts, [{ trigger: "button" }]);
+  assert.equal(f.live.stage, "summary");
+  assert.equal(transport.requests[0].signal.aborted, true);
+  assert.equal(f.live.review.pending, false);
+  assert.equal(f.live.review.context, null);
+  assert.equal(f.live.commands.enabled, false);
+  assert.equal(f.get("summary-help").hidden, true);
+  assert.equal(f.get("workout-video").srcObject, null);
+  const history = f.live.history.sets;
+  const summaryTitle = f.get("summary-title").textContent;
+  transport.resolve(coachResponse());
+  await submission;
+
+  assert.equal(f.live.stage, "summary");
+  assert.equal(f.get("summary-title").textContent, summaryTitle);
+  assert.equal(f.get("coach-result").hidden, true);
+  assert.deepEqual(f.voice.headlines, []);
+  assert.deepEqual(f.live.history.sets, history);
+  assert.equal(f.live.history.sets[0].coaching, null);
+  assert.equal(transport.requests.length, 1);
+  assert.equal(network.mock.callCount(), 0);
 });
 
 test("summary combines completed sets, effort and replay highlights, then disposal releases the entire session", (t) => {

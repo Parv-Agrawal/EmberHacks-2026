@@ -13,6 +13,10 @@
       rel="stylesheet"
       href="{{ url_for('static', filename='css/style.css') }}"
     />
+    <link
+      rel="stylesheet"
+      href="{{ url_for('static', filename='css/emergency.css') }}"
+    />
     <script
       type="module"
       src="{{ url_for('static', filename='js/main.js') }}"
@@ -923,10 +927,11 @@
                 class="text-button help-button"
                 type="button"
               >
-                Call for help · demo stop
+                Call for help · SOS demo
               </button>
               <p class="field-hint">
-                The help command stops this session. No call or message is sent.
+                The help command stops this session and opens a simulated
+                handoff. No call or message is sent.
               </p>
               <p class="field-hint">
                 Counts and cues are camera estimates. If a movement feels
@@ -1248,6 +1253,7 @@
         pace.</span
       >
     </footer>
+    {% include "emergency.html" %}
     <noscript
       ><div class="noscript-notice">
         Spotter needs JavaScript for camera access and workout setup. Enable it

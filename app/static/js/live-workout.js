@@ -19,7 +19,8 @@ const text = (id, value) => {
 
 /** One active set and one review; only an explicit review sends a workout frame. */
 export class LiveWorkout {
-  constructor({ onExit, requestCoach }) {
+  constructor({ onExit, requestCoach, onHelp }) {
+    this.onHelp = onHelp;
     this.onExit = onExit;
     this.stage = "idle";
     this.history = new SessionHistory();
@@ -469,7 +470,7 @@ export class LiveWorkout {
 
   async handleCommand({ type, text: transcript = "" }) {
     if (document.hidden || ["idle", "summary"].includes(this.stage)) return;
-    if (type === "help") return this.requestHelp();
+    if (type === "help") return this.requestHelp("voice");
     if (type === "pain") return this.stopForPain();
     if (type === "pause") return this.pause();
     if (type === "resume") {
@@ -549,8 +550,9 @@ export class LiveWorkout {
     });
   }
 
-  requestHelp() {
-    // Phase four handles the command locally; it never contacts a dispatcher.
+  requestHelp(trigger = "button") {
+    if (this.onHelp) return this.onHelp({ trigger });
+    // Standalone tracking fixtures retain a local stop when no SOS UI is mounted.
     this.commands.stop();
     this.review.cancel();
     this.voice.stop();

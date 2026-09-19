@@ -59,6 +59,15 @@ def create_smoke_app():
     def session_fixture_script():
         return send_file(PROJECT_ROOT / "tests/browser/session-smoke.js", max_age=0)
 
+    @app.get("/test-emergency")
+    def emergency_smoke():
+        html = render_template("index.html").replace('/static/js/main.js', '/test-emergency.js')
+        return html, {"Cache-Control": "no-store"}
+
+    @app.get("/test-emergency.js")
+    def emergency_fixture_script():
+        return send_file(PROJECT_ROOT / "tests/browser/emergency-smoke.js", max_age=0)
+
     return app
 
 
