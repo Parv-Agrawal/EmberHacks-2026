@@ -1,0 +1,171 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Spotter — camera dependency smoke test</title>
+    <style>
+      body {
+        max-width: 760px;
+        margin: 48px auto;
+        padding: 0 24px;
+        font:
+          17px/1.6 system-ui,
+          sans-serif;
+        background: #10141c;
+        color: #e7edf8;
+      }
+      h1 {
+        font-size: 28px;
+        line-height: 1.3;
+      }
+      .test-label {
+        color: #facd77;
+        font-weight: 700;
+      }
+      #status {
+        padding: 16px;
+        border: 1px solid #78889d;
+        border-radius: 10px;
+      }
+      [data-result="pass"] #status {
+        color: #93edb9;
+        border-color: #93edb9;
+      }
+      [data-result="fail"] #status {
+        color: #ffa8a8;
+        border-color: #ffa8a8;
+      }
+      pre {
+        white-space: pre-wrap;
+        overflow-wrap: anywhere;
+        font-size: 14px;
+      }
+      button {
+        padding: 10px 16px;
+        border: 0;
+        border-radius: 8px;
+        font: inherit;
+        cursor: pointer;
+      }
+    </style>
+  </head>
+  <body data-result="running">
+    <p class="test-label">DEVELOPER TEST FIXTURE — PHASE 1</p>
+    <h1>Local camera dependency smoke test</h1>
+    <p>
+      This test loads the actual vendored MediaPipe runtime, WebAssembly, and
+      pose model. It analyzes a blank canvas. It never requests webcam access
+      and cannot mark a workout ready.
+    </p>
+    <p id="status" role="status">Starting the browser smoke test…</p>
+    <pre id="details"></pre>
+    <button id="run" type="button" disabled>Run test again</button>
+    <script type="module">
+      const status = document.querySelector("#status");
+      const details = document.querySelector("#details");
+      const button = document.querySelector("#run");
+      const report = (message) => {
+        details.textContent += `${message}\n`;
+      };
+
+      async function run() {
+        button.disabled = true;
+        document.body.dataset.result = "running";
+        details.textContent = "";
+        let model;
+        try {
+          status.textContent =
+            "Loading the actual local MediaPipe module and WebAssembly…";
+          const { FilesetResolver, PoseLandmarker } = await import(
+            "/static/vendor/vision_bundle.mjs"
+          );
+          const { evaluateLandmarks, CalibrationGate } = await import(
+            "/static/js/calibration.js"
+          );
+          const fileset = await FilesetResolver.forVisionTasks(
+            "/static/vendor/wasm",
+          );
+          report(
+            "PASS: local JavaScript module and WebAssembly fileset loaded.",
+          );
+          status.textContent =
+            "Initializing the pinned pose model on CPU in VIDEO mode…";
+          model = await PoseLandmarker.createFromOptions(fileset, {
+            baseOptions: {
+              modelAssetPath: "/static/vendor/pose_landmarker_lite.task",
+              delegate: "CPU",
+            },
+            runningMode: "VIDEO",
+            numPoses: 1,
+            minPoseDetectionConfidence: 0.65,
+            minPosePresenceConfidence: 0.65,
+            minTrackingConfidence: 0.65,
+            outputSegmentationMasks: false,
+          });
+          report(
+            "PASS: real PoseLandmarker initialized with local model, CPU, VIDEO mode.",
+          );
+          const canvas = document.createElement("canvas");
+          canvas.width = 640;
+          canvas.height = 480;
+          const context = canvas.getContext("2d");
+          context.fillStyle = "#808080";
+          context.fillRect(0, 0, canvas.width, canvas.height);
+          status.textContent =
+            "Running real model inference on a blank canvas…";
+          const result = model.detectForVideo(canvas, performance.now());
+          if (result.landmarks.length !== 0)
+            throw new Error(
+              `Blank frame unexpectedly returned ${result.landmarks.length} pose(s).`,
+            );
+          report(
+            "PASS: detectForVideo returned zero poses for the blank frame.",
+          );
+          const evaluated = evaluateLandmarks(result.landmarks[0]);
+          const state = new CalibrationGate().update(
+            result.landmarks[0],
+            performance.now(),
+          );
+          if (
+            evaluated.allVisible ||
+            state.ready ||
+            state.status !== "unavailable"
+          )
+            throw new Error("Blank frame incorrectly passed the framing gate.");
+          report(
+            `PASS: calibration remains unavailable; ready=${state.ready}.`,
+          );
+          report(state.message);
+          model.close();
+          model = null;
+          report(
+            "PASS: model resources closed. No camera permission requested.",
+          );
+          document.body.dataset.result = "pass";
+          status.textContent =
+            "PASS — real local model/WASM inference works; blank frames remain Assessment Unavailable.";
+        } catch (error) {
+          document.body.dataset.result = "fail";
+          status.textContent =
+            "FAIL — camera dependency smoke test did not complete.";
+          report(`${error?.name || "Error"}: ${error?.message || error}`);
+          report(
+            "Check npm ci and npm run setup:vision, then inspect the browser console and local static asset responses.",
+          );
+        } finally {
+          try {
+            model?.close();
+          } catch (error) {
+            report(`Model cleanup error: ${error.message}`);
+            document.body.dataset.result = "fail";
+          }
+          button.disabled = false;
+        }
+      }
+
+      button.addEventListener("click", run);
+      run();
+    </script>
+  </body>
+</html>

@@ -1,62 +1,50 @@
-# Squat form checker (v1)
+# Spotter — Phase 1
 
-A webcam-based Flask app that uses MediaPipe to detect body landmarks,
-judges squat depth from joint angles, and streams a live overlay +
-tips back to the browser as an MJPEG feed.
+Spotter is a local hackathon demo for TCard-style check-in, personalized workout setup, and browser-based camera calibration. The implemented flow ends at **“Your workout setup is complete.”** Exercise tracking, Gemini coaching, voice commands, and emergency flows are not implemented in this phase.
 
-## Structure
+## Run locally
 
-- `app/pose/` — wraps MediaPipe (the *only* place mediapipe is imported)
-- `app/exercises/` — form-correctness logic (squat.py has placeholder
-  thresholds you need to tune)
-- `app/feedback/` — drawing the overlay + generating tips text
-- `app/routes.py` — the only file that knows about Flask/HTTP; wires
-  the above together
+Use Python 3.11 or newer, Node.js 20 or newer, and a modern browser with webcam access. Camera access requires localhost or HTTPS.
 
-This separation means you can swap any one piece (a different pose
-library, a different exercise, a React frontend) without touching the
-others. See the routes.py -> React migration note below.
-
-## Setup
-
-```
-python -m venv venv
-source venv/bin/activate   # venv\Scripts\activate on Windows
-pip install -r requirements.txt
-python run.py
+```sh
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install -r requirements.txt
+npm ci
+npm run setup:vision
+python -m flask --app run run --port 5055
 ```
 
-Then open http://127.0.0.1:5000 — you should see your webcam feed with
-a MediaPipe skeleton drawn over it and a "Go lower" / "Good depth"
-message in the corner.
+On Windows, activate the environment with `.venv\Scripts\activate`. Open [Spotter on localhost](http://127.0.0.1:5055). Alternatively, `python run.py` starts the development server on port 5000.
 
-## What's actually working vs. placeholder
+`setup:vision` builds the pinned barcode decoder and copies the pinned MediaPipe runtime into `app/static/vendor/`. It downloads a fixed Pose Landmarker Lite model and verifies its SHA-256 checksum. Internet access is needed for initial installation; camera processing uses the resulting local assets. Run setup again after removing generated assets. The stylesheet separately uses Google Fonts.
 
-Working out of the box:
-- Webcam capture, MediaPipe pose detection, skeleton drawing, MJPEG
-  streaming to the browser.
+## Try the flow
 
-Left as TODOs (search the codebase for `TODO`):
-- `exercises/squat.py` — knee angle thresholds are guesses. Record
-  yourself doing real squats, print `knee_angle`, and tune
-  `STANDING_KNEE_ANGLE` / `BOTTOM_KNEE_ANGLE`.
-- `exercises/squat.py` — no rep-counting state machine yet, no back-
-  angle check.
-- `feedback/tips.py` — reference video is just a YouTube search link;
-  swap in one you trust.
+1. Enable the TCard camera and scan a Code 128 or Code 39 barcode containing `2176123456789100`. A green outline and confirmation tone precede sign-in. For a camera-free walkthrough, expand the demo-access control and enter `leeterry`.
+2. Choose a goal, experience level, available time, equipment, and movements to avoid. Draft a routine using bodyweight squats and/or dumbbell bicep curls.
+3. Edit sets, reps, or rest; remove a movement if needed. Confirm the routine.
+4. Start camera calibration. Keep shoulders, elbows, wrists, hips, knees, and ankles visible. After 1.2 seconds of confident, uninterrupted full-body visibility, confirm camera setup. Missing or stale frames keep confirmation disabled.
 
-## Later: swapping in a React frontend
+The seeded account is **Terry Lee**, UTORid `leeterry`, student ID `1234567890`, demo email `terry.lee@example.com`. The barcode is a public demo account selector: it does **not** verify a person's identity, academic standing, or University affiliation. This is not University SSO.
 
-`routes.py` is the only file that knows this is server-rendered HTML.
-When you're ready for React:
-1. Add JSON endpoints (e.g. `/api/landmarks`, `/api/tips`) alongside
-   or instead of the template route.
-2. Keep `/video_feed` as-is — a React component can point an `<img>`
-   tag at it exactly like the current template does.
-3. Nothing in `pose/`, `exercises/`, or `feedback/` needs to change.
+The email fallback issues a single-use six-digit code valid for **five minutes**, with at most five verification attempts. By default, the server terminal displays the code with a clear demo prefix; this console flow does **not** verify email ownership. To deliver actual email, configure `SPOTTER_DEMO_EMAIL` with a mailbox you control and supply `SMTP_HOST`, `SMTP_FROM`, and any required SMTP credentials. The full [Phase 1 specification](docs/phase-1.md#email-and-session-configuration) covers configuration and verification.
 
-## Running tests
+Camera pixels and barcode decoding stay in browser memory. No card photos, workout images, or video are saved or uploaded. Only a decoded demo identifier reaches the sign-in endpoint. Preferences, including restriction text, are retained only in bounded, process-local session memory so reloading and editing a routine preserves movement exclusions. They are never stored in the cookie or written to disk, and disappear with the session or a server restart.
 
+## Verify
+
+```sh
+python -m pytest -q
+npm test
 ```
-pytest
-```
+
+Latest verification: **65 Python tests passed, one optional legacy test skipped; 11 JavaScript tests passed**. The JavaScript suite includes real decoding of generated Code 128/Code 39 fixtures, framing thresholds, stale-frame rejection, and camera cleanup behavior.
+
+Browser checks passed for manual and console-code sign-in, editing/confirming two exercises, equipment and restriction filters, disabled confirmation while camera permission was pending, and a 390-pixel mobile layout without overflow. A real browser smoke test also loaded the local MediaPipe module/model/WASM, ran CPU video-mode inference on a blank canvas, kept calibration unavailable, and closed model resources. Physical-card/webcam scanning, live full-body calibration, actual permission denial, and SMTP mailbox delivery remain hardware/account checks. Follow the [manual acceptance checks](docs/phase-1.md#manual-acceptance-checks).
+
+To repeat the camera dependency test without webcam permission, run `python scripts/browser-smoke.py` and open [the isolated browser fixture](http://127.0.0.1:5056/test-camera). Expect a green PASS result. This test route exists only in that separate loopback test server.
+
+The old Python camera prototype remains in `app/pose`, `app/exercises`, and `app/feedback`; Phase 1 does not invoke it. Its optional dependencies are in `requirements-legacy.txt` for a separate Python 3.11 environment. The current `/video_feed` endpoint is removed.
+
+See [Phase 1 specifications, API contracts, and verification](docs/phase-1.md) for implementation details and review criteria.

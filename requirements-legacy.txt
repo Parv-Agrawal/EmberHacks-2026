@@ -1,0 +1,6 @@
+# Optional dependencies for the existing Python camera prototype.
+# Use a separate Python 3.11 environment. Phase 1 does not import these modules.
+-r requirements.txt
+opencv-python
+mediapipe
+numpy

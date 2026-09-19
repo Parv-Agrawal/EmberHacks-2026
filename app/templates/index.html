@@ -1,31 +1,763 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <title>Squat form checker</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
-</head>
-<body>
-    <h1>Squat form checker</h1>
-
-    <div class="layout">
-        <div class="video-panel">
-            <img src="{{ url_for('main.video_feed') }}" alt="Live pose-tracked video feed">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#f8f8f2" />
+    <title>Spotter · Find your rhythm</title>
+    <link
+      rel="icon"
+      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='10' fill='%23d9f45c'/%3E%3Ctext x='8' y='23' font-size='25' font-family='sans-serif' fill='%23242623'%3Es%3C/text%3E%3C/svg%3E"
+    />
+    <link
+      rel="stylesheet"
+      href="{{ url_for('static', filename='css/style.css') }}"
+    />
+    <script
+      type="module"
+      src="{{ url_for('static', filename='js/main.js') }}"
+    ></script>
+  </head>
+  <body>
+    <svg
+      class="icon-library"
+      xmlns="http://www.w3.org/2000/svg"
+      aria-hidden="true"
+    >
+      <symbol id="i-arrow" viewBox="0 0 24 24">
+        <path d="M4 12h15m-6-6 6 6-6 6" />
+      </symbol>
+      <symbol id="i-check" viewBox="0 0 24 24">
+        <path d="m5 12 4 4L19 6" />
+      </symbol>
+      <symbol id="i-camera" viewBox="0 0 24 24">
+        <path d="M8 5 6 8H3v12h18V8h-3l-2-3z" />
+        <circle cx="12" cy="13" r="3.5" />
+      </symbol>
+      <symbol id="i-scan" viewBox="0 0 24 24">
+        <path
+          d="M8 3H3v5m13-5h5v5M3 16v5h5m13-5v5h-5M7 7v10m3-10v10m4-10v10m3-10v10"
+        />
+      </symbol>
+      <symbol id="i-lock" viewBox="0 0 24 24">
+        <rect x="5" y="10" width="14" height="11" rx="3" />
+        <path d="M8 10V7a4 4 0 0 1 8 0v3m-4 4v3" />
+      </symbol>
+      <symbol id="i-weight" viewBox="0 0 24 24">
+        <path d="m7 7 10 10M3 7l4-4M17 21l4-4M5 11l6-6m2 14 6-6" />
+      </symbol>
+      <symbol id="i-spark" viewBox="0 0 24 24">
+        <path d="m12 2 3 7 7 3-7 3-3 7-3-7-7-3 7-3z" />
+      </symbol>
+      <symbol id="i-clock" viewBox="0 0 24 24">
+        <circle cx="12" cy="12" r="9" />
+        <path d="M12 7v5l3 2" />
+      </symbol>
+      <symbol id="i-mail" viewBox="0 0 24 24">
+        <rect x="3" y="5" width="18" height="14" rx="2" />
+        <path d="m3 6 9 7 9-7" />
+      </symbol>
+      <symbol id="i-person" viewBox="0 0 24 24">
+        <circle cx="12" cy="5" r="2" />
+        <path d="M5 10h14m-7-2v7m-4 6 4-6 4 6" />
+      </symbol>
+      <symbol id="i-close" viewBox="0 0 24 24">
+        <path d="m6 6 12 12M6 18 18 6" />
+      </symbol>
+      <symbol id="i-leaf" viewBox="0 0 24 24">
+        <path d="M20 3C8 2 2 8 6 16s16 2 14-13ZM5 21 16 9" />
+      </symbol>
+    </svg>
+    <header class="site-header">
+      <a class="brand" href="/" aria-label="Spotter home"
+        ><span class="brand-mark" aria-hidden="true">s.</span>spotter<span
+          class="brand-dot"
+          >.</span
+        ></a
+      >
+      <span class="header-note"
+        ><span class="live-dot"></span> A little support. Every rep.</span
+      >
+      <div class="account-area">
+        <span class="demo-label">HACKATHON DEMO</span
+        ><button id="sign-out" class="avatar-button" hidden title="Sign out">
+          TL <span>Sign out</span>
+        </button>
+      </div>
+    </header>
+    <main id="main-content">
+      <nav class="steps" aria-label="Workout setup progress">
+        <ol>
+          <li data-step="signin" aria-current="step">
+            <span class="step-number">1</span><span>Check in</span>
+          </li>
+          <li data-step="onboarding">
+            <span class="step-number">2</span><span>Make it yours</span>
+          </li>
+          <li data-step="plan">
+            <span class="step-number">3</span><span>Your workout</span>
+          </li>
+          <li data-step="calibration">
+            <span class="step-number">4</span><span>Find your frame</span>
+          </li>
+        </ol>
+        <span class="setup-note"
+          ><svg class="icon"><use href="#i-clock" /></svg> A few minutes to get
+          you moving</span
+        >
+      </nav>
+      <div
+        id="global-error"
+        class="notice error global-notice"
+        role="alert"
+        hidden
+      ></div>
+      <section
+        id="view-signin"
+        class="view welcome-layout"
+        aria-labelledby="signin-title"
+      >
+        <div class="welcome-copy">
+          <div class="eyebrow">
+            <span class="eyebrow-line"></span> YOUR SPACE TO GET STRONGER
+          </div>
+          <h1 id="signin-title" tabindex="-1">
+            Find your rhythm.<br />We’ll spot you<span class="accent-dot"
+              >.</span
+            >
+          </h1>
+          <p class="intro">
+            A workout that meets you where you are.<br />A little guidance to
+            help you move forward.
+          </p>
+          <div class="benefit-list">
+            <div>
+              <span class="benefit-icon"
+                ><svg class="icon"><use href="#i-person" /></svg
+              ></span>
+              <p>
+                <strong>Made for your starting point</strong
+                ><span>Your goals, your equipment, your pace.</span>
+              </p>
+            </div>
+            <div>
+              <span class="benefit-icon"
+                ><svg class="icon"><use href="#i-camera" /></svg
+              ></span>
+              <p>
+                <strong>Get comfortably in frame</strong
+                ><span>A quick camera check before you move.</span>
+              </p>
+            </div>
+            <div>
+              <span class="benefit-icon"
+                ><svg class="icon"><use href="#i-lock" /></svg
+              ></span>
+              <p>
+                <strong>Your camera stays yours</strong
+                ><span>Card images stay on your device. Always.</span>
+              </p>
+            </div>
+          </div>
+          <div class="welcome-bottom">
+            <div class="mini-avatar">TL</div>
+            <div>
+              <span class="micro-label">TODAY’S DEMO ACCOUNT</span
+              ><strong>Terry Lee <span>· leeterry</span></strong>
+            </div>
+            <span class="wave-lines" aria-hidden="true">↗</span>
+          </div>
         </div>
-
-        <div class="tips-panel">
-            <h2>Cues</h2>
-            <ul>
-                {% for cue in tips.cues %}
-                <li>{{ cue }}</li>
-                {% endfor %}
-            </ul>
-            {% if tips.reference_video %}
-            <p><a href="{{ tips.reference_video }}" target="_blank">Reference video</a></p>
-            {% endif %}
+        <div class="signin-card surface">
+          <div class="card-heading">
+            <div>
+              <span class="eyebrow small">LET’S GET YOU CHECKED IN</span>
+              <h2>Welcome to your workout.</h2>
+            </div>
+            <span class="round-icon"
+              ><svg class="icon"><use href="#i-spark" /></svg
+            ></span>
+          </div>
+          <div class="tab-group" role="tablist" aria-label="Sign-in method">
+            <button
+              id="tab-card"
+              role="tab"
+              aria-selected="true"
+              aria-controls="panel-card"
+              type="button"
+            >
+              <svg class="icon"><use href="#i-scan" /></svg> Scan TCard</button
+            ><button
+              id="tab-email"
+              role="tab"
+              aria-selected="false"
+              aria-controls="panel-email"
+              tabindex="-1"
+              type="button"
+            >
+              <svg class="icon"><use href="#i-mail" /></svg> Use email
+            </button>
+          </div>
+          <div id="panel-card" role="tabpanel" aria-labelledby="tab-card">
+            <div class="scanner-preview">
+              <video
+                id="barcode-video"
+                playsinline
+                muted
+                aria-label="TCard camera view"
+              ></video
+              ><canvas id="barcode-overlay" aria-hidden="true"></canvas>
+              <div class="camera-grain" aria-hidden="true"></div>
+              <span class="preview-label"
+                ><span class="status-dot"></span>
+                <span id="scanner-label">CAMERA OFF</span></span
+              >
+              <div class="scan-reticle" aria-hidden="true">
+                <i></i><i></i><i></i><i></i>
+              </div>
+              <div id="scanner-placeholder" class="scanner-placeholder">
+                <div class="card-illustration" aria-hidden="true">
+                  <div class="fake-card-top">
+                    <span>U of T</span><span>TCARD</span>
+                  </div>
+                  <div class="fake-card-lines"><b></b><b></b></div>
+                  <div class="fake-barcode"></div>
+                </div>
+                <p>Your next session starts here.</p>
+              </div>
+              <div class="camera-bottom">
+                <span class="camera-corner">⌁</span
+                ><span>Position the barcode inside the frame</span
+                ><span class="camera-corner">⌁</span>
+              </div>
+            </div>
+            <p id="scanner-status" class="status-text" role="status">
+              Hold the barcode side of your TCard toward the camera.
+            </p>
+            <button
+              id="start-scanner"
+              class="button primary full"
+              type="button"
+            >
+              <svg class="icon"><use href="#i-camera" /></svg
+              ><span>Enable camera to check in</span
+              ><svg class="icon trailing"><use href="#i-arrow" /></svg>
+            </button>
+            <button
+              id="stop-scanner"
+              class="text-button full"
+              type="button"
+              hidden
+            >
+              Turn camera off
+            </button>
+            <details class="demo-access">
+              <summary>Trying the demo without a TCard?</summary>
+              <p>
+                Only the seeded demo account is available. Enter
+                <strong>leeterry</strong> or <strong>2176123456789100</strong>.
+              </p>
+              <form id="demo-form">
+                <label class="sr-only" for="demo-code"
+                  >Demo barcode or UTORid</label
+                ><input
+                  id="demo-code"
+                  name="code"
+                  autocomplete="off"
+                  placeholder="Demo barcode or UTORid"
+                  maxlength="32"
+                  required
+                /><button class="button compact" type="submit">
+                  Check in <svg class="icon"><use href="#i-arrow" /></svg>
+                </button>
+              </form>
+            </details>
+          </div>
+          <div
+            id="panel-email"
+            role="tabpanel"
+            aria-labelledby="tab-email"
+            hidden
+          >
+            <div class="email-intro">
+              <span class="email-icon"
+                ><svg class="icon"><use href="#i-mail" /></svg
+              ></span>
+              <h3>A small code. You’re in.</h3>
+              <p>Use a one-time code to load your demo profile.</p>
+            </div>
+            <form id="email-request-form">
+              <label for="email-address">Demo account email</label
+              ><input
+                id="email-address"
+                type="email"
+                name="email"
+                autocomplete="email"
+                value="terry.lee@example.com"
+                required
+                maxlength="254"
+              /><button class="button primary full" type="submit">
+                Send verification code
+                <svg class="icon"><use href="#i-arrow" /></svg>
+              </button>
+            </form>
+            <form id="email-verify-form" hidden>
+              <label for="email-code">One-time verification code</label
+              ><input
+                id="email-code"
+                name="code"
+                type="text"
+                inputmode="numeric"
+                autocomplete="one-time-code"
+                pattern="[0-9]{6}"
+                minlength="6"
+                maxlength="6"
+                placeholder="000000"
+                required
+              /><button class="button primary full" type="submit">
+                Verify & check in
+                <svg class="icon"><use href="#i-arrow" /></svg></button
+              ><button id="change-email" class="text-button full" type="button">
+                Change email or request a new code
+              </button>
+            </form>
+            <p id="email-status" class="status-text" role="status">
+              Local demo codes appear in the server terminal and do not verify
+              email ownership. Email delivery is available when configured.
+            </p>
+          </div>
+          <p id="signin-error" class="notice error" role="alert" hidden></p>
+          <div class="privacy-note">
+            <svg class="icon"><use href="#i-lock" /></svg
+            ><span
+              >Decoded on your device. Card photos are never saved or sent to
+              AI.</span
+            >
+          </div>
+          <p class="demo-disclosure">
+            Demo access only. A barcode does not verify university identity or
+            academic standing.
+          </p>
         </div>
-    </div>
-
-    <script src="{{ url_for('static', filename='js/main.js') }}"></script>
-</body>
+      </section>
+      <section
+        id="view-onboarding"
+        class="view onboarding-layout"
+        aria-labelledby="onboarding-title"
+        hidden
+      >
+        <div class="section-intro">
+          <div class="eyebrow">
+            <span class="eyebrow-line"></span> GOOD TO SEE YOU,
+            <span id="greeting-name">TERRY</span>
+          </div>
+          <h1 id="onboarding-title" tabindex="-1">
+            Your pace.<br /> Your starting point<span class="accent-dot">.</span>
+          </h1>
+          <p class="intro">
+            Tell us a little about today. We’ll put together a simple workout
+            you can make your own.
+          </p>
+          <div class="little-note">
+            <svg class="icon"><use href="#i-leaf" /></svg>
+            <p>
+              <strong>A little goes a long way.</strong
+              ><span
+                >Start with what feels manageable. You can adjust every part of
+                your workout.</span
+              >
+            </p>
+          </div>
+          <div class="catalog-note">
+            <span class="micro-label">IN YOUR EXERCISE LIBRARY</span>
+            <div>
+              <span>Bodyweight squat</span><span>Dumbbell bicep curl</span>
+            </div>
+          </div>
+        </div>
+        <form id="onboarding-form" class="surface onboarding-form">
+          <fieldset>
+            <legend>What brings you here?</legend>
+            <div class="goal-grid">
+              <label class="choice-card"
+                ><input type="radio" name="goal" value="strength" checked /><svg
+                  class="icon"
+                >
+                  <use href="#i-weight" /></svg
+                ><strong>Build strength</strong
+                ><span>A stronger everyday</span></label
+              ><label class="choice-card"
+                ><input type="radio" name="goal" value="fitness" /><svg
+                  class="icon"
+                >
+                  <use href="#i-spark" /></svg
+                ><strong>Get moving</strong
+                ><span>Make movement a habit</span></label
+              ><label class="choice-card"
+                ><input type="radio" name="goal" value="confidence" /><svg
+                  class="icon"
+                >
+                  <use href="#i-person" /></svg
+                ><strong>Find confidence</strong
+                ><span>Get comfortable moving</span></label
+              >
+            </div>
+          </fieldset>
+          <div class="form-two">
+            <div>
+              <label for="experience">Your experience</label
+              ><select id="experience" name="experience">
+                <option value="beginner">Just getting started</option>
+                <option value="intermediate">I work out sometimes</option>
+                <option value="experienced">I’m a regular</option>
+              </select>
+            </div>
+            <fieldset>
+              <legend>Time for yourself</legend>
+              <div class="segmented">
+                <label
+                  ><input type="radio" name="minutes" value="10" /><span
+                    >10 min</span
+                  ></label
+                ><label
+                  ><input type="radio" name="minutes" value="20" checked /><span
+                    >20 min</span
+                  ></label
+                ><label
+                  ><input type="radio" name="minutes" value="30" /><span
+                    >30 min</span
+                  ></label
+                >
+              </div>
+            </fieldset>
+          </div>
+          <fieldset>
+            <legend>What do you have nearby?</legend>
+            <div class="option-row">
+              <label class="check-chip"
+                ><input
+                  type="checkbox"
+                  name="equipment"
+                  value="bodyweight"
+                  checked
+                /><span>Just me · bodyweight</span></label
+              ><label class="check-chip"
+                ><input
+                  type="checkbox"
+                  name="equipment"
+                  value="dumbbells"
+                /><span>A pair of dumbbells</span></label
+              >
+            </div>
+            <p class="field-hint">
+              Bicep curls are included only when you have dumbbells.
+            </p>
+          </fieldset>
+          <fieldset>
+            <legend>
+              Any movements to leave out? <span class="optional">Optional</span>
+            </legend>
+            <div class="option-row">
+              <label class="check-chip"
+                ><input type="checkbox" name="avoid" value="squat" /><span
+                  >Squats</span
+                ></label
+              ><label class="check-chip"
+                ><input type="checkbox" name="avoid" value="bicep_curl" /><span
+                  >Bicep curls</span
+                ></label
+              >
+            </div>
+            <label class="sr-only" for="restrictions"
+              >Other movement restrictions</label
+            ><textarea
+              id="restrictions"
+              name="restrictions"
+              maxlength="500"
+              rows="2"
+              placeholder="Anything else to avoid? e.g. avoid squats"
+            ></textarea>
+            <p class="field-hint">
+              We’ll leave out affected movements. If a restriction is unclear,
+              revise it before drafting a workout.
+            </p>
+          </fieldset>
+          <p id="onboarding-error" class="notice error" role="alert" hidden></p>
+          <div class="form-footer">
+            <span>Made for today. Adjustable by you.</span
+            ><button class="button primary" type="submit">
+              Build my workout <svg class="icon"><use href="#i-arrow" /></svg>
+            </button>
+          </div>
+        </form>
+      </section>
+      <section id="view-plan" class="view" aria-labelledby="plan-title" hidden>
+        <div class="section-heading">
+          <div>
+            <div class="eyebrow">
+              <span class="eyebrow-line"></span> A LITTLE STRUCTURE. ROOM TO
+              MAKE IT YOURS.
+            </div>
+            <h1 id="plan-title" tabindex="-1">
+              Here’s your starting point<span class="accent-dot">.</span>
+            </h1>
+            <p class="intro">
+              A simple plan for today. Adjust the details until it feels right.
+            </p>
+          </div>
+          <button id="edit-preferences" class="button secondary" type="button">
+            Edit preferences
+          </button>
+        </div>
+        <div class="plan-layout">
+          <div>
+            <div id="plan-warnings" class="notice" role="status" hidden></div>
+            <div id="exercise-list" class="exercise-list"></div>
+          </div>
+          <aside class="surface plan-summary">
+            <span class="eyebrow small">TODAY, AT YOUR PACE</span>
+            <h2>Your session</h2>
+            <div class="session-stat">
+              <span id="plan-minutes">20</span><span>minutes available</span
+              ><svg class="icon"><use href="#i-clock" /></svg>
+            </div>
+            <div class="summary-row">
+              <span>Exercises</span><strong id="plan-exercise-count">—</strong>
+            </div>
+            <div class="summary-row">
+              <span>Total sets</span><strong id="plan-set-count">—</strong>
+            </div>
+            <div class="summary-row">
+              <span>Estimated workout</span
+              ><strong id="plan-estimate">—</strong>
+            </div>
+            <div class="summary-row">
+              <span>Your focus</span
+              ><strong id="plan-goal">Build strength</strong>
+            </div>
+            <p class="summary-tip">
+              <svg class="icon"><use href="#i-leaf" /></svg>Leave room to warm
+              up, take your time, and rest when you need it.
+            </p>
+            <p id="plan-error" class="notice error" role="alert" hidden></p>
+            <button
+              id="confirm-workout"
+              class="button primary full"
+              type="button"
+            >
+              Looks good. Let’s set up
+              <svg class="icon"><use href="#i-arrow" /></svg>
+            </button>
+            <p class="field-hint centered">Up next: a quick camera check.</p>
+          </aside>
+        </div>
+      </section>
+      <section
+        id="view-calibration"
+        class="view"
+        aria-labelledby="calibration-title"
+        hidden
+      >
+        <div class="section-heading">
+          <div>
+            <div class="eyebrow">
+              <span class="eyebrow-line"></span> A GOOD SESSION STARTS WITH A
+              CLEAR VIEW
+            </div>
+            <h1 id="calibration-title" tabindex="-1">
+              Find your frame<span class="accent-dot">.</span>
+            </h1>
+            <p class="intro">
+              A little space, a steady camera, and you’re nearly there.
+            </p>
+          </div>
+          <button id="back-to-plan" class="button secondary" type="button">
+            Back to workout
+          </button>
+        </div>
+        <div class="calibration-layout">
+          <div>
+            <div class="calibration-preview">
+              <video
+                id="calibration-video"
+                playsinline
+                muted
+                aria-label="Full-body camera calibration view"
+              ></video
+              ><canvas id="calibration-overlay" aria-hidden="true"></canvas
+              ><span class="preview-label"
+                ><span class="status-dot"></span> LIVE CAMERA CHECK</span
+              >
+              <div id="calibration-placeholder" class="calibration-placeholder">
+                <svg
+                  class="body-guide"
+                  viewBox="0 0 180 300"
+                  aria-hidden="true"
+                >
+                  <circle cx="90" cy="40" r="23" />
+                  <path
+                    d="M50 112q40-28 80 0M90 67v116m-40-71-13 58m93-58 13 58m-53 13-28 86m28-86 28 86"
+                  />
+                </svg>
+                <p>Your full body goes here.</p>
+                <span>Keep your shoulders, hands, hips, and feet in view.</span>
+              </div>
+              <div id="calibration-badge" class="calibration-badge">
+                Camera is off
+              </div>
+            </div>
+            <div class="camera-caption">
+              <svg class="icon"><use href="#i-lock" /></svg
+              ><span
+                >This camera check runs on your device. No images are uploaded
+                or saved.</span
+              ><button
+                id="stop-calibration"
+                class="text-button"
+                type="button"
+                hidden
+              >
+                Turn camera off
+              </button>
+            </div>
+          </div>
+          <aside class="surface calibration-guide">
+            <span class="eyebrow small">MAKE A LITTLE ROOM</span>
+            <h2>Let’s get the full picture.</h2>
+            <ol class="setup-instructions">
+              <li>
+                <span>01</span>
+                <div>
+                  <strong>Set your camera somewhere steady</strong>
+                  <p>Place it around hip height, with light in front of you.</p>
+                </div>
+              </li>
+              <li>
+                <span>02</span>
+                <div>
+                  <strong>Take a few steps back</strong>
+                  <p>
+                    Face the camera. Keep your whole body in frame with a little
+                    space around you.
+                  </p>
+                </div>
+              </li>
+              <li>
+                <span>03</span>
+                <div>
+                  <strong>Stand still for a moment</strong>
+                  <p>Keep both arms visible while we check your framing.</p>
+                </div>
+              </li>
+            </ol>
+            <div class="visibility-checks">
+              <div data-check="shoulders">
+                <span>Shoulders</span><span class="check-state">Waiting</span>
+              </div>
+              <div data-check="arms">
+                <span>Elbows & wrists</span
+                ><span class="check-state">Waiting</span>
+              </div>
+              <div data-check="hips">
+                <span>Hips</span><span class="check-state">Waiting</span>
+              </div>
+              <div data-check="legs">
+                <span>Knees & ankles</span
+                ><span class="check-state">Waiting</span>
+              </div>
+            </div>
+            <p id="calibration-status" class="status-text" role="status">
+              Enable your camera when you’re ready.
+            </p>
+            <div
+              class="stability-track"
+              role="progressbar"
+              aria-label="Stable framing"
+              aria-valuemin="0"
+              aria-valuemax="100"
+              aria-valuenow="0"
+            >
+              <span id="stability-fill"></span>
+            </div>
+            <button
+              id="start-calibration"
+              class="button primary full"
+              type="button"
+            >
+              <svg class="icon"><use href="#i-camera" /></svg> Enable camera</button
+            ><button
+              id="finish-calibration"
+              class="button primary full"
+              type="button"
+              disabled
+            >
+              Confirm camera setup
+              <svg class="icon"><use href="#i-check" /></svg>
+            </button>
+            <p class="field-hint centered">
+              Framing must stay clear before you can continue.
+            </p>
+          </aside>
+        </div>
+      </section>
+      <section
+        id="view-ready"
+        class="view ready-layout"
+        aria-labelledby="ready-title"
+        hidden
+      >
+        <div class="ready-orbit" aria-hidden="true">
+          <span
+            ><svg class="icon"><use href="#i-check" /></svg
+          ></span>
+        </div>
+        <div class="eyebrow">CHECKED IN. PLANNED OUT. IN FRAME.</div>
+        <h1 id="ready-title" tabindex="-1">
+          You’ve found your rhythm<span class="accent-dot">.</span>
+        </h1>
+        <p class="intro">
+          Your workout setup is complete, <span id="ready-name">Terry</span>.
+        </p>
+        <div class="ready-summary surface">
+          <div>
+            <svg class="icon"><use href="#i-check" /></svg
+            ><span>Profile loaded</span>
+          </div>
+          <div>
+            <svg class="icon"><use href="#i-check" /></svg
+            ><span id="ready-workout">Workout confirmed</span>
+          </div>
+          <div>
+            <svg class="icon"><use href="#i-check" /></svg
+            ><span>Camera framing checked</span>
+          </div>
+        </div>
+        <p class="ready-description">
+          This demo currently covers check-in, workout planning, and camera
+          setup.
+        </p>
+        <div class="ready-actions">
+          <button id="ready-edit" class="button secondary" type="button">
+            Edit my workout</button
+          ><button id="ready-recheck" class="button primary" type="button">
+            Recheck camera <svg class="icon"><use href="#i-camera" /></svg>
+          </button>
+        </div>
+      </section>
+    </main>
+    <footer class="site-footer">
+      <span class="footer-brand">spotter.</span
+      ><span>A stronger you starts with showing up.</span
+      ><span class="footer-private"
+        ><svg class="icon"><use href="#i-lock" /></svg> Your space. Your
+        pace.</span
+      >
+    </footer>
+    <noscript
+      ><div class="noscript-notice">
+        Spotter needs JavaScript for camera access and workout setup. Enable it
+        in your browser to continue.
+      </div></noscript
+    >
+  </body>
 </html>

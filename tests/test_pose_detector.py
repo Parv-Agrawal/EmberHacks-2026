@@ -4,6 +4,10 @@ Tests for app/pose/detector.py.
 TODO: add real assertions once you have a sample image/frame with a
 known pose to test against (see data/ for where to put fixtures).
 """
+import pytest
+
+pytest.importorskip("mediapipe", reason="Optional legacy Python camera prototype dependency")
+
 from app.pose.detector import PoseDetector
 
 

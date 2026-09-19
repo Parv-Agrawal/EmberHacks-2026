@@ -1,62 +1,125 @@
-# app/routes.py
+"""Phase 1 HTTP endpoints. Camera images remain entirely in the browser."""
+from copy import deepcopy
+import hmac
+import secrets
+import smtplib
+import time
 
-import cv2
-from flask import Blueprint, Response, render_template
+from flask import Blueprint, current_app, g, jsonify, render_template, session
 
-from app.pose.detector import PoseDetector
-from app.exercises.controller import ExerciseController
-from app.exercises.squat import SquatChecker
-from app.feedback.overlay import draw_overlay
-from app.feedback.tips import get_tips
+from app.auth import (
+    APIError, challenge_digest, current_user, deliver_code, ensure_session,
+    json_body, normalize_email, rate_limit, require_user, short_string, sign_in, store,
+)
+from app.workouts import CATALOG, confirm_workout, draft_workout
 
 main_bp = Blueprint("main", __name__)
 
-# Initialize dependencies
-detector = PoseDetector()
-controller = ExerciseController()
 
-# Set the active exercise
-controller.set_exercise(SquatChecker())
-
-def generate_frames():
-    """Capture webcam frames, run the pipeline, and yield JPEG bytes."""
-    cap = cv2.VideoCapture(0)
-
-    if not cap.isOpened():
-        raise RuntimeError("Could not open webcam.")
-
-    try:
-        while True:
-            success, frame = cap.read()
-            if not success:
-                break
-
-            landmarks = detector.find_landmarks(frame)
-            
-            # Use the controller here
-            result = controller.get_feedback(landmarks) if landmarks else None
-
-            # draw_overlay now receives the dictionary result
-            frame = draw_overlay(frame, landmarks, result)
-
-            ok, buffer = cv2.imencode(".jpg", frame)
-            if not ok:
-                continue
-
-            yield (
-                b"--frame\r\n"
-                b"Content-Type: image/jpeg\r\n\r\n" + buffer.tobytes() + b"\r\n"
-            )
-    finally:
-        cap.release()
-
-@main_bp.route("/")
+@main_bp.get("/")
 def index():
-    return render_template("index.html", tips=get_tips("squat"))
+    return render_template("index.html")
 
-@main_bp.route("/video_feed")
-def video_feed():
-    return Response(
-        generate_frames(),
-        mimetype="multipart/x-mixed-replace; boundary=frame",
-    )
+
+@main_bp.get("/api/session")
+def get_session():
+    state = ensure_session()
+    return jsonify(user=current_user() if state.authenticated else None,
+                   csrf_token=session["csrf"], workout=state.confirmed,
+                   preferences=state.preferences,
+                   demo_email=current_app.config["SPOTTER_DEMO_EMAIL"])
+
+
+@main_bp.post("/api/auth/barcode")
+def barcode_sign_in():
+    rate_limit("barcode", 20, 60)
+    body = json_body({"code"})
+    code = short_string(body["code"], "Barcode", 64)
+    if code not in {"2176123456789100", "leeterry"}:
+        raise APIError("This card is not linked to the seeded demo account.", 401, "unknown_demo_card")
+    return jsonify(sign_in())
+
+
+@main_bp.post("/api/auth/email/request")
+def request_email_code():
+    rate_limit("email_request", 5, 15 * 60)
+    body = json_body({"email"})
+    email = normalize_email(body["email"])
+    state = ensure_session()
+    delivery = "email" if current_app.config["SMTP_HOST"] else "console"
+    state.email_challenge = None
+    if email == current_app.config["SPOTTER_DEMO_EMAIL"]:
+        code = f"{secrets.randbelow(1_000_000):06d}"
+        challenge = {"email": email, "digest": challenge_digest(email, code),
+                     "expires": time.time() + 300, "attempts": 0}
+        try:
+            delivery = deliver_code(email, code)
+        except (smtplib.SMTPException, OSError):
+            raise APIError("Email delivery is unavailable. Try the demo card sign-in or retry later.", 503, "delivery_unavailable") from None
+        state.email_challenge = challenge
+    return jsonify(message="If this email matches the demo account, a one-time code has been sent.", delivery=delivery)
+
+
+@main_bp.post("/api/auth/email/verify")
+def verify_email_code():
+    rate_limit("email_verify", 15, 15 * 60)
+    body = json_body({"email", "code"})
+    email = normalize_email(body["email"])
+    code = short_string(body["code"], "Verification code", 6)
+    if len(code) != 6 or not code.isascii() or not code.isdigit():
+        raise APIError("Enter the six-digit verification code.")
+    state = ensure_session()
+    with store().lock:
+        challenge = state.email_challenge
+        if not challenge or challenge["expires"] <= time.time() or challenge["attempts"] >= 5:
+            state.email_challenge = None
+            raise APIError("This code has expired or is unavailable. Request a new code.", 401, "code_unavailable")
+        challenge["attempts"] += 1
+        valid = hmac.compare_digest(challenge["email"], email) and hmac.compare_digest(challenge["digest"], challenge_digest(email, code))
+        if not valid:
+            if challenge["attempts"] >= 5:
+                state.email_challenge = None
+            raise APIError("That verification code is incorrect.", 401, "incorrect_code")
+        state.email_challenge = None
+        return jsonify(sign_in())
+
+
+@main_bp.post("/api/logout")
+def logout():
+    json_body(set())
+    store().remove(session.get("sid"))
+    session.clear()
+    ensure_session()
+    return jsonify(ok=True, csrf_token=session["csrf"])
+
+
+@main_bp.get("/api/catalog")
+@require_user
+def catalog():
+    return jsonify(exercises=list(CATALOG.values()))
+
+
+@main_bp.post("/api/workout/draft")
+@require_user
+def create_workout_draft():
+    rate_limit("draft", 30, 60)
+    body = json_body({"goal", "experience", "minutes", "equipment", "avoid", "restrictions"})
+    workout, warnings = draft_workout(body)
+    # Retain the validated intake only in volatile server memory so reloading
+    # and editing a plan cannot silently discard earlier movement restrictions.
+    preferences = deepcopy(body)
+    preferences["restrictions"] = preferences["restrictions"].strip()
+    g.spotter_state.preferences = preferences
+    g.spotter_state.draft = deepcopy(workout)
+    g.spotter_state.confirmed = None
+    return jsonify(workout=workout, warnings=warnings)
+
+
+@main_bp.post("/api/workout/confirm")
+@require_user
+def confirm_workout_draft():
+    rate_limit("confirm", 30, 60)
+    body = json_body({"workout"})
+    workout = confirm_workout(body["workout"], g.spotter_state.draft)
+    g.spotter_state.confirmed = deepcopy(workout)
+    return jsonify(workout=workout)

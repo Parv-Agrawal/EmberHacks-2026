@@ -1,0 +1,21 @@
+{
+  "name": "spotter-phase-one-camera",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "setup:vision": "node scripts/setup-vision.mjs",
+    "test": "node --test tests/js/*.test.mjs"
+  },
+  "dependencies": {
+    "@mediapipe/tasks-vision": "0.10.21",
+    "@zxing/browser": "0.1.5",
+    "@zxing/library": "0.21.3"
+  },
+  "devDependencies": {
+    "esbuild": "0.25.12"
+  }
+}
