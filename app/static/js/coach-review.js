@@ -267,25 +267,9 @@ export class CoachReview {
     text("coach-tip-one", feedback.tips[0]);
     text("coach-tip-two", feedback.tips[1]);
     text("coach-encouragement", feedback.encouragement);
-    text(
-      "coach-source",
-      source === "gemini"
-        ? "GEMINI · MULTIMODAL REVIEW"
-        : reason === "no_image"
-          ? "LOCAL GUIDANCE · NO KEYFRAME"
-          : "LOCAL GUIDANCE · GEMINI UNAVAILABLE",
-    );
+    text("coach-source", "YOUR SET REVIEW");
     $("coach-result").hidden = false;
-    text(
-      "coach-status",
-      source === "gemini"
-        ? "Review ready. Camera measurements are estimates; your reported experience adds context."
-        : reason === "no_image"
-          ? "No completed-rep image is available, so nothing was sent to Gemini. Showing local guidance."
-          : reason === "missing_api_key"
-            ? "Gemini is not configured. Add GEMINI_API_KEY to the project’s .env file, save it, and review again. Showing local guidance for now."
-            : "Gemini analysis was unavailable. Showing local guidance based on your measurements and feedback.",
-    );
+    text("coach-status", "");
     if (!document.hidden) this.voice.headline(feedback.headline);
   }
 

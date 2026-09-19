@@ -135,7 +135,8 @@ def test_multimodal_call_fuses_image_metrics_feedback_and_only_whitelisted_prefe
     for private in ("Terry", "leeterry", "1234567890", "2176123456789100", "terry.lee", "private restriction", "private-name"):
         assert private not in prompt
     config = request["config"]
-    assert config.response_schema is coach.CoachFeedback
+    assert config.response_schema is None
+    assert config.response_json_schema == coach.CoachFeedback.model_json_schema()
     assert config.response_mime_type == "application/json"
     assert config.temperature == 0.3
     assert config.http_options.timeout == 15_000
@@ -162,7 +163,10 @@ def test_real_sdk_serializes_schema_and_inline_image_without_external_network(cl
     assert "gemini-3.8-flash:generateContent" in str(seen[0].url)
     request = json.loads(seen[0].content)
     assert request["contents"][0]["parts"][0]["inlineData"]["mimeType"] == "image/jpeg"
-    schema = request["generationConfig"].get("responseJsonSchema") or request["generationConfig"]["responseSchema"]
+    assert "responseSchema" not in request["generationConfig"]
+    schema = request["generationConfig"]["responseJsonSchema"]
+    assert schema["additionalProperties"] is False
+    assert "additional_properties" not in json.dumps(request)
     assert (schema["properties"]["tips"].get("minItems") or schema["properties"]["tips"]["min_items"]) == 2
     assert (schema["properties"]["tips"].get("maxItems") or schema["properties"]["tips"]["max_items"]) == 2
     assert set(schema["required"]) == {"headline", "tips", "encouragement"}
@@ -440,3 +444,15 @@ def test_real_sdk_serializes_every_keyframe_in_one_request(client, monkeypatch):
     parts = seen[0]["contents"][0]["parts"]
     assert len([part for part in parts if "inlineData" in part]) == 2
     assert [frame["rep_number"] for frame in json.loads(parts[-1]["text"])["keyframes"]] == [1, 2]
+
+
+@pytest.mark.parametrize("code,reason", [(429, "provider_rate_limited"), (503, "provider_busy"), (401, "invalid_api_key"), (403, "provider_access_denied")])
+def test_provider_error_categories_are_safe(client, provider, code, reason):
+    _, instance = provider
+    error = RuntimeError("private provider details")
+    error.code = code
+    instance.models.generate_content.side_effect = error
+    response = post(client, "/api/coach", body())
+    assert_contract(response, "fallback")
+    assert response.headers["X-Spotter-Coach-Reason"] == reason
+    assert "private provider details" not in response.get_data(as_text=True)

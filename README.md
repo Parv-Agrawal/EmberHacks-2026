@@ -52,7 +52,7 @@ python -m pytest -q
 npm test
 ```
 
-**Verified:** 269 JavaScript tests passed; 179 Python tests passed, with one optional legacy test skipped.
+**Verified:** 269 JavaScript tests passed; 183 Python tests passed, with one optional legacy test skipped.
 
 Verification covers authenticated requests, Gemini serialization/fallback, pain aborts, movement tracking, command parsing and microphone lifecycle, spoken-cue echo protection, camera-gated resume, bounded rest, summary calculations, replay memory limits, profile consent, allowlisted local SOS handoff, immediate cancellation, and cleanup. See the [Phase 5 verification procedure](docs/phase-5.md#verification-procedure).
 

@@ -157,7 +157,7 @@ test("review fuses measured telemetry, feedback, and the worst-rep image only af
     f.get("coach-encouragement").textContent,
     feedback().encouragement,
   );
-  assert.equal(f.get("coach-source").textContent, "GEMINI · MULTIMODAL REVIEW");
+  assert.equal(f.get("coach-source").textContent, "YOUR SET REVIEW");
   assert.equal(f.get("coach-result").hidden, false);
   assert.deepEqual(f.voice.headlines, [feedback().headline]);
   assert.equal(f.review.pending, false);
@@ -347,7 +347,7 @@ test("a final set offers coaching without an unneeded next-set decision", async 
   assert.equal(f.get("coach-result").hidden, false);
 });
 
-test("missing images or request capability yield clearly labeled local guidance without upload", async (t) => {
+test("missing images or request capability yield a neutral review without upload", async (t) => {
   const f = fixture(t, { set: { ...context(), image: null } });
   assert.match(f.get("coach-status").textContent, /No completed-rep image/);
   f.input("I felt fatigued");
@@ -356,9 +356,9 @@ test("missing images or request capability yield clearly labeled local guidance 
   assert.equal(f.calls.length, 0);
   assert.equal(
     f.get("coach-source").textContent,
-    "LOCAL GUIDANCE · NO KEYFRAME",
+    "YOUR SET REVIEW",
   );
-  assert.match(f.get("coach-status").textContent, /nothing was sent to Gemini/);
+  assert.equal(f.get("coach-status").textContent, "");
   assert.match(f.get("coach-headline").textContent, /8 completed reps/);
   assert.match(f.get("coach-headline").textContent, /reported fatigue/);
   assert.equal(f.voice.headlines.length, 1);
@@ -368,10 +368,10 @@ test("missing images or request capability yield clearly labeled local guidance 
   f.input("Felt easy");
   await f.review.submit();
   assert.equal(f.calls.length, 0);
-  assert.match(f.get("coach-source").textContent, /LOCAL GUIDANCE/);
+  assert.match(f.get("coach-source").textContent, /YOUR SET REVIEW/);
 });
 
-test("valid server fallback is labeled local and explains a missing API key", async (t) => {
+test("valid server fallback uses a neutral heading without provider status", async (t) => {
   const f = fixture(t, {
     requestCoach: async () => ({
       source: "fallback",
@@ -383,9 +383,9 @@ test("valid server fallback is labeled local and explains a missing API key", as
   await f.review.submit();
   assert.equal(
     f.get("coach-source").textContent,
-    "LOCAL GUIDANCE · GEMINI UNAVAILABLE",
+    "YOUR SET REVIEW",
   );
-  assert.match(f.get("coach-status").textContent, /not configured/);
+  assert.equal(f.get("coach-status").textContent, "");
   assert.deepEqual(f.voice.headlines, [feedback().headline]);
 });
 
@@ -399,7 +399,7 @@ for (const malformed of [
     const f = fixture(t, { requestCoach: async () => malformed });
     f.input("I felt off-balance");
     await f.review.submit();
-    assert.match(f.get("coach-source").textContent, /LOCAL GUIDANCE/);
+    assert.match(f.get("coach-source").textContent, /YOUR SET REVIEW/);
     assert.match(f.get("coach-headline").textContent, /8 completed reps/);
     assert.match(f.get("coach-headline").textContent, /gentler/);
     assert.equal(f.review.pending, false);
@@ -415,7 +415,7 @@ test("network failures produce local coaching and preserve a usable proposal", a
   });
   f.input("I felt fatigued");
   await f.review.submit();
-  assert.match(f.get("coach-source").textContent, /LOCAL GUIDANCE/);
+  assert.match(f.get("coach-source").textContent, /YOUR SET REVIEW/);
   assert.equal(f.review.proposal.rest_seconds, 90);
   assert.equal(f.get("coach-submit").disabled, false);
   f.review.decide(true);
