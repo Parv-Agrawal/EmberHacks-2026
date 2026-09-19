@@ -8,11 +8,13 @@ export class VoiceCoach {
     Utterance = globalThis.SpeechSynthesisUtterance,
     now = () => performance.now(),
     onCue = () => {},
+    onSpeaking = () => {},
   } = {}) {
     this.synthesis = synthesis;
     this.Utterance = Utterance;
     this.now = now;
     this.onCue = onCue;
+    this.onSpeaking = onSpeaking;
     this.supported = Boolean(
       synthesis &&
         typeof synthesis.speak === "function" &&
@@ -77,6 +79,7 @@ export class VoiceCoach {
       if (this.active !== utterance) return;
       failed = isError;
       this.active = null;
+      this.onSpeaking(false);
       if (isError && deduplicate) this.recent.delete(key);
       utterance.onstart = null;
       utterance.onend = null;
@@ -95,6 +98,7 @@ export class VoiceCoach {
       utterance.onend = () => finish();
       utterance.onerror = () => finish(true);
       this.active = utterance;
+      this.onSpeaking(true);
       // Also throttle browsers that omit the start event or reject speech later.
       this.lastSubmittedAt = now;
       if (deduplicate) this.recent.set(key, now);
@@ -154,6 +158,7 @@ export class VoiceCoach {
   stop() {
     const active = this.active;
     this.active = null;
+    if (active) this.onSpeaking(false);
     if (active) {
       active.onstart = null;
       active.onend = null;

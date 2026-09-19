@@ -50,6 +50,15 @@ def create_smoke_app():
     def coach_fixture_script():
         return send_file(PROJECT_ROOT / "tests/browser/coach-smoke.js", max_age=0)
 
+    @app.get("/test-session")
+    def session_smoke():
+        html = render_template("index.html").replace('/static/js/main.js', '/test-session.js')
+        return html, {"Cache-Control": "no-store"}
+
+    @app.get("/test-session.js")
+    def session_fixture_script():
+        return send_file(PROJECT_ROOT / "tests/browser/session-smoke.js", max_age=0)
+
     return app
 
 

@@ -117,6 +117,7 @@ export class CoachReview {
     this.cancel();
     this.voice.stop();
     this.context = null;
+    this.lastFeedback = null;
     this.proposal = null;
     this.stopped = false;
     $("coach-feedback").value = "";
@@ -140,6 +141,7 @@ export class CoachReview {
   feedbackChanged({ committed = false } = {}) {
     if (!this.context || this.stopped) return;
     const feedback = $("coach-feedback").value.trim();
+    this.lastFeedback = null;
     this.cancel();
     this.voice.stop();
     $("coach-result").hidden = true;
@@ -176,6 +178,7 @@ export class CoachReview {
   }
 
   markPain() {
+    this.lastFeedback = null;
     if (!this.context) return;
     this.cancel();
     this.stopped = true;
@@ -248,6 +251,7 @@ export class CoachReview {
   }
 
   showFeedback(feedback, source, reason = "") {
+    this.lastFeedback = { ...structuredClone(feedback), source };
     text("coach-headline", feedback.headline);
     text("coach-tip-one", feedback.tips[0]);
     text("coach-tip-two", feedback.tips[1]);

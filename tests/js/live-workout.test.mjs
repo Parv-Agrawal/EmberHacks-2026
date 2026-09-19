@@ -23,6 +23,9 @@ function element() {
     hidden: false,
     disabled: false,
     textContent: "",
+    value: "",
+    children: [],
+    focused: false,
     srcObject: null,
     readyState: 3,
     videoWidth: 1280,
@@ -46,6 +49,15 @@ function element() {
     removeAttribute(name) {
       this.attributes.delete(name);
       delete this[name];
+    },
+    append(...children) {
+      this.children.push(...children);
+    },
+    replaceChildren(...children) {
+      this.children = [...children];
+    },
+    focus() {
+      this.focused = true;
     },
     pause() {},
   });
@@ -86,7 +98,7 @@ function fixture(t, workout = plan(), { requestCoach } = {}) {
   Object.assign(document, {
     hidden: false,
     getElementById: get,
-    createElement: canvas,
+    createElement: (tag) => (tag === "canvas" ? canvas() : element()),
   });
   const savedDocument = Object.getOwnPropertyDescriptor(globalThis, "document");
   Object.defineProperty(globalThis, "document", {
@@ -429,7 +441,11 @@ for (const exerciseId of ["squat", "bicep_curl"]) {
       "late frames never mutate a finished set",
     );
     f.live.next();
-    assert.equal(f.exits(), 1);
+    assert.equal(f.live.stage, "summary");
+    assert.equal(f.exits(), 0);
+    assert.equal(f.get("session-summary").hidden, false);
+    assert.equal(f.get("summary-reps").textContent, 2);
+    assert.equal(f.live.sessionSummary.replay.entries.length, 1);
   });
 }
 
@@ -806,3 +822,289 @@ for (const action of ["next set", "dispose"]) {
     assert.deepEqual(f.voice.headlines, []);
   });
 }
+
+test("voice pause keeps completed reps, and resume waits for newly calibrated camera frames", async (t) => {
+  const f = fixture(t);
+  f.start();
+  f.rep();
+  f.feed([140, 135, 120, 90]);
+  assert.ok(f.live.frames.candidate);
+  await f.live.handleCommand({ type: "pause" });
+  assert.equal(f.live.stage, "paused");
+  assert.equal(f.live.frames.candidate, null);
+  assert.equal(f.get("workout-video").srcObject, null);
+  assert.equal(f.live.tracker.summary().completed_reps, 1);
+
+  // A cached ready snapshot from before the pause cannot resume movement.
+  f.camera.lastFrameAt = f.now() - MAX_FRAME_AGE_MS - 1;
+  f.live.cameraState = { ready: true, status: "ready" };
+  await f.live.handleCommand({ type: "resume" });
+  assert.equal(f.live.stage, "preparing");
+  assert.equal(f.live.resumeWhenReady, true);
+  assert.equal(f.live.cameraState.ready, false);
+  f.feed([90, 110, 150, 175]);
+  assert.equal(f.live.tracker.summary().completed_reps, 1);
+  f.ready();
+  assert.equal(f.live.stage, "active");
+  assert.equal(f.live.resumeWhenReady, false);
+  f.arm();
+  f.rep();
+  assert.equal(f.live.tracker.summary().completed_reps, 2);
+});
+
+test("a stale ready event cannot consume a requested voice resume before a fresh frame arrives", async (t) => {
+  const f = fixture(t);
+  f.start();
+  f.rep();
+  await f.live.handleCommand({ type: "pause" });
+  await f.live.handleCommand({ type: "resume" });
+  f.camera.lastFrameAt = f.now() - MAX_FRAME_AGE_MS - 1;
+  f.live.onCamera({ status: "ready", ready: true, message: "Ready." });
+  assert.equal(f.live.stage, "preparing");
+  assert.equal(f.live.resumeWhenReady, true);
+  assert.equal(f.live.activeSince, null);
+  f.ready();
+  assert.equal(f.live.stage, "active");
+  assert.equal(f.live.resumeWhenReady, false);
+  assert.equal(f.live.tracker.summary().completed_reps, 1);
+});
+
+test("voice more-rest adds time to the active countdown and keeps an accepted adaptation", async (t) => {
+  const f = fixture(t, adaptivePlan());
+  completeSet(f);
+  f.click("feedback-balance");
+  f.click("adapt-accept");
+  const accepted = structuredClone(f.live.pendingAdaptation);
+  f.at(f.live.finishedAt + 20000);
+  await f.live.handleCommand({ type: "more_rest" });
+  assert.equal(f.live.restUntil, f.live.finishedAt + 120000);
+  assert.match(f.get("live-rest").textContent, /1:40 remaining/);
+  assert.deepEqual(f.live.pendingAdaptation, accepted);
+  f.at(f.live.finishedAt + 90000);
+  f.live.next();
+  assert.equal(f.live.stage, "finished");
+  f.at(f.live.restUntil);
+  f.live.next();
+  assert.equal(f.live.exercise.reps, 6);
+  assert.equal(f.live.exercise.rest_seconds, 90);
+  assert.equal(f.live.manualRestUntil, 0);
+});
+
+test("explicit extra rest survives keep-plan decisions and edits, and caps remaining rest at two minutes", (t) => {
+  const f = fixture(t, adaptivePlan());
+  completeSet(f);
+  f.at(f.live.finishedAt + 20000);
+  f.click("live-more-rest");
+  const extended = f.live.restUntil;
+  assert.equal(extended, f.live.finishedAt + 90000);
+  f.click("feedback-fatigue");
+  f.click("adapt-accept");
+  f.click("adapt-keep");
+  assert.equal(f.live.pendingAdaptation, null);
+  assert.equal(f.live.restUntil, extended);
+  f.input("I felt off-balance", { committed: true });
+  assert.equal(f.live.restUntil, extended);
+  for (let index = 0; index < 8; index++) f.live.moreRest();
+  assert.equal(f.live.restUntil, f.now() + 120000);
+  f.at(f.live.restUntil);
+  f.live.next();
+  assert.equal(f.live.exercise.reps, 8);
+  assert.equal(f.live.exercise.rest_seconds, 60);
+});
+
+test("more-rest during movement pauses locally without ending the set or losing completed reps", async (t) => {
+  const f = fixture(t);
+  f.start();
+  f.rep();
+  await f.live.handleCommand({ type: "more_rest" });
+  assert.equal(f.live.stage, "paused");
+  assert.equal(f.live.tracker.summary().completed_reps, 1);
+  assert.equal(f.live.history.sets.length, 0);
+  assert.equal(f.get("workout-video").srcObject, null);
+  assert.match(f.get("voice-action-status").textContent, /Paused for a break/);
+});
+
+test("spoken effort and balance reports populate check-in without uploading and preserve distinct concerns", async (t) => {
+  const transport = deferredReview();
+  const f = fixture(t, adaptivePlan(), transport);
+  f.start();
+  f.rep();
+  await f.live.handleCommand({ type: "balance", text: "I lost my balance" });
+  assert.equal(f.live.stage, "paused");
+  assert.equal(f.live.setFeedback, "I felt off-balance");
+  await f.live.handleCommand({ type: "easy", text: "That felt easy" });
+  assert.equal(f.live.setFeedback, "I felt off-balance. Felt easy");
+  assert.equal(transport.requests.length, 0);
+  f.live.finish(false);
+  assert.equal(f.get("coach-feedback").value, "I felt off-balance. Felt easy");
+  assert.equal(f.live.review.proposal.kind, "reduce");
+  await f.live.handleCommand({ type: "fatigue", text: "I feel tired" });
+  await f.live.handleCommand({ type: "easy", text: "Felt easy" });
+  assert.equal(
+    f.get("coach-feedback").value,
+    "I felt off-balance. Felt easy. I felt fatigued",
+  );
+  assert.equal(transport.requests.length, 0);
+  assert.match(f.get("voice-action-status").textContent, /No review was sent/);
+  f.live.endSession();
+  assert.equal(
+    f.live.history.sets[0].feedback,
+    "I felt off-balance. Felt easy. I felt fatigued",
+  );
+  assert.equal(transport.requests.length, 0);
+});
+
+test("spoken pain immediately stops partial motion and preserves the completed history for summary", async (t) => {
+  const transport = deferredReview();
+  const f = fixture(t, adaptivePlan(), transport);
+  f.start();
+  f.rep();
+  const completedImage = f.live.frames.worst.image;
+  f.feed([140, 135, 120, 90]);
+  await f.live.handleCommand({ type: "pain", text: "My knee hurts" });
+  assert.equal(f.live.stage, "finished");
+  assert.equal(f.live.painStopped, true);
+  assert.equal(f.live.frames.candidate, null);
+  assert.equal(f.get("workout-video").srcObject, null);
+  assert.equal(f.live.history.sets[0].summary.completed_reps, 1);
+  assert.equal(f.live.history.sets[0].stoppedForPain, true);
+  assert.equal(f.live.history.sets[0].keyframes[0].image, completedImage);
+  assert.equal(transport.requests.length, 0);
+  f.live.endSession();
+  assert.equal(f.live.stage, "summary");
+  assert.equal(f.get("summary-reps").textContent, 1);
+  assert.equal(f.live.history.sets[0].feedback, "I felt pain");
+  assert.match(f.live.history.summary().futureFocus[0], /pain report/);
+});
+
+test("call-for-help ends into the local summary, stops devices and sends no outbound request", async (t) => {
+  const transport = deferredReview();
+  const f = fixture(t, adaptivePlan(), transport);
+  const network = t.mock.method(globalThis, "fetch", async () => {
+    throw new Error("The help command must not make outbound requests.");
+  });
+  f.start();
+  f.rep();
+  f.live.commands.enabled = true;
+  await f.live.handleCommand({ type: "help", text: "Call for help" });
+  assert.equal(f.live.stage, "summary");
+  assert.equal(f.live.commands.enabled, false);
+  assert.equal(f.get("workout-video").srcObject, null);
+  assert.equal(f.live.review.context, null);
+  assert.equal(f.live.tracker, null);
+  assert.equal(f.live.interval, null);
+  assert.equal(f.get("summary-help").hidden, false);
+  assert.equal(f.get("summary-help").focused, true);
+  assert.equal(f.get("summary-reps").textContent, 1);
+  assert.equal(transport.requests.length, 0);
+  assert.equal(network.mock.callCount(), 0);
+  const starts = f.camera.starts.length;
+  await f.live.handleCommand({ type: "resume" });
+  assert.equal(f.camera.starts.length, starts);
+  assert.equal(f.live.stage, "summary");
+});
+
+test("help during review cancels pending analysis and a late result cannot replace summary or speak", async (t) => {
+  const transport = deferredReview();
+  const f = fixture(t, adaptivePlan(), transport);
+  completeSet(f);
+  f.click("feedback-easy");
+  const submission = f.live.review.submit();
+  assert.equal(transport.requests.length, 1);
+  f.click("live-help");
+  assert.equal(transport.requests[0].signal.aborted, true);
+  assert.equal(f.live.stage, "summary");
+  assert.equal(f.get("summary-help").hidden, false);
+  transport.resolve(coachResponse());
+  await submission;
+  assert.equal(f.live.stage, "summary");
+  assert.equal(f.get("coach-result").hidden, true);
+  assert.deepEqual(f.voice.headlines, []);
+  assert.equal(f.live.history.sets[0].coaching, null);
+});
+
+test("summary combines completed sets, effort and replay highlights, then disposal releases the entire session", (t) => {
+  const f = fixture(t);
+  completeSet(f);
+  f.get("set-effort").value = "6";
+  f.input("Felt easy", { committed: true });
+  f.at(f.live.restUntil);
+  f.live.next();
+  completeSet(f);
+  f.get("set-effort").value = "8";
+  f.input("I felt fatigued", { committed: true });
+  f.at(f.live.restUntil);
+  f.live.next();
+  completeSet(f);
+  assert.equal(f.get("set-effort").value, "");
+  f.live.next();
+  assert.equal(f.live.stage, "summary");
+  assert.equal(f.get("summary-reps").textContent, 8);
+  assert.equal(f.get("summary-sets").textContent, "3 / 3");
+  assert.equal(f.get("summary-effort").textContent, "7 / 10");
+  assert.equal(f.get("summary-exercises").children.length, 2);
+  assert.equal(f.get("summary-set-list").children.length, 3);
+  assert.equal(f.live.history.summary().retainedFrames, 3);
+  assert.equal(f.live.sessionSummary.replay.entries.length, 3);
+  assert.deepEqual(
+    f.live.history.sets.map((set) => set.effort),
+    [6, 8, null],
+  );
+  assert.deepEqual(
+    f.live.history.sets.map((set) => set.feedback),
+    ["Felt easy", "I felt fatigued", ""],
+  );
+  assert.match(f.live.history.summary().exercises[0].formTrend, /stayed at 0%/);
+  assert.equal(f.live.frames.worst, null);
+  assert.equal(f.live.tracker, null);
+  assert.equal(f.live.interval, null);
+  assert.equal(f.get("workout-live-shell").hidden, true);
+  assert.equal(f.get("summary-title").focused, true);
+  f.click("summary-exit");
+  assert.equal(f.exits(), 1);
+  // Main routing disposes on leaving the summary or signing out.
+  f.live.dispose();
+  assert.deepEqual(f.live.history.sets, []);
+  assert.deepEqual(f.live.sessionSummary.replay.entries, []);
+  assert.equal(f.get("replay-image").src, undefined);
+  assert.equal(f.get("summary-set-list").children.length, 0);
+  assert.equal(f.get("summary-help").hidden, true);
+});
+
+test("hiding the page turns off command capture and cancels automatic resume until explicit interaction", async (t) => {
+  const f = fixture(t);
+  f.start();
+  f.rep();
+  await f.live.handleCommand({ type: "pause" });
+  await f.live.handleCommand({ type: "resume" });
+  assert.equal(f.live.resumeWhenReady, true);
+  f.live.commands.enabled = true;
+  f.document.hidden = true;
+  f.document.dispatchEvent(new Event("visibilitychange"));
+  assert.equal(f.live.stage, "paused");
+  assert.equal(f.live.commands.enabled, false);
+  assert.equal(f.live.resumeWhenReady, false);
+  const starts = f.camera.starts.length;
+  await f.live.handleCommand({ type: "resume" });
+  await f.live.handleCommand({ type: "help" });
+  assert.equal(f.live.stage, "paused");
+  assert.equal(f.camera.starts.length, starts);
+  f.document.hidden = false;
+  f.document.dispatchEvent(new Event("visibilitychange"));
+  assert.equal(f.live.stage, "paused");
+  assert.equal(f.live.commands.enabled, false);
+  f.ready();
+  assert.equal(f.live.stage, "paused");
+});
+
+test("repeat uses the most recent spoken cue without reviewing or changing the set", async (t) => {
+  const transport = deferredReview();
+  const f = fixture(t, adaptivePlan(), transport);
+  f.start();
+  f.live.lastSpoken = "Keep the movement controlled.";
+  await f.live.handleCommand({ type: "repeat" });
+  assert.deepEqual(f.voice.headlines, ["Keep the movement controlled."]);
+  assert.equal(f.get("live-cue").textContent, "Keep the movement controlled.");
+  assert.equal(f.live.stage, "active");
+  assert.equal(transport.requests.length, 0);
+});

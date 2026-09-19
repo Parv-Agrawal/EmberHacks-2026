@@ -355,3 +355,99 @@ test("headline speech failures remain contained and never enqueue after failed c
   assert.equal(asynchronous.coach.active, null);
   assert.equal(asynchronous.coach.headline("Retry finding."), true);
 });
+
+test("speaking hook suspends recognition before audio submission, including queued audio", () => {
+  for (const autoStart of [true, false]) {
+    const transitions = [];
+    const f = fixture({
+      autoStart,
+      onSpeaking(speaking) {
+        transitions.push(speaking);
+        if (speaking) assert.ok(f.coach.active);
+      },
+    });
+    const speak = f.synthesis.speak.bind(f.synthesis);
+    f.synthesis.speak = (utterance) => {
+      assert.deepEqual(transitions, [true]);
+      assert.equal(f.coach.active, utterance);
+      speak(utterance);
+    };
+    assert.equal(f.coach.cue("Keep the movement controlled."), true);
+    assert.deepEqual(transitions, [true]);
+    if (!autoStart) f.start();
+    assert.deepEqual(transitions, [true], "start does not suspend twice");
+    f.end();
+    assert.deepEqual(transitions, [true, false]);
+  }
+});
+
+test("end, error, cancellation, and muting each release speaking state once", () => {
+  for (const finish of [
+    (f) => f.end(),
+    (f) => f.error(),
+    (f) => f.coach.stop(),
+    (f) => f.coach.setEnabled(false),
+    (f) => f.coach.dispose(),
+  ]) {
+    const transitions = [];
+    const f = fixture({ onSpeaking: (value) => transitions.push(value) });
+    f.coach.cue("A cue to finish.");
+    const oldEnd = f.spoken[0].onend;
+    const oldError = f.spoken[0].onerror;
+    finish(f);
+    assert.equal(f.coach.active, null);
+    assert.deepEqual(transitions, [true, false]);
+    oldEnd();
+    oldError();
+    f.coach.stop();
+    assert.deepEqual(transitions, [true, false]);
+  }
+});
+
+test("stale utterance events cannot resume recognition during a newer headline", () => {
+  const transitions = [];
+  const f = fixture({
+    autoStart: false,
+    onSpeaking: (value) => transitions.push(value),
+  });
+  f.coach.cue("Old cue.");
+  const old = {
+    start: f.spoken[0].onstart,
+    end: f.spoken[0].onend,
+    error: f.spoken[0].onerror,
+  };
+  assert.equal(f.coach.headline("Current set finding."), true);
+  assert.deepEqual(transitions, [true, false, true]);
+  old.start();
+  old.end();
+  old.error();
+  assert.deepEqual(transitions, [true, false, true]);
+  assert.equal(f.coach.active, f.spoken[1]);
+  f.start();
+  f.end();
+  assert.deepEqual(transitions, [true, false, true, false]);
+});
+
+test("rejected speech releases the microphone gate and suppressed cues do not reopen it", () => {
+  for (const reject of [
+    (utterance) => utterance.onerror?.(),
+    () => {
+      throw new Error("Audio unavailable");
+    },
+  ]) {
+    const transitions = [];
+    const f = fixture({ onSpeaking: (value) => transitions.push(value) });
+    f.synthesis.speak = reject;
+    assert.equal(f.coach.cue("Could not play."), false);
+    assert.deepEqual(transitions, [true, false]);
+  }
+  const transitions = [];
+  const f = fixture({ onSpeaking: (value) => transitions.push(value) });
+  f.coach.cue("Still playing.");
+  f.at(10000);
+  assert.equal(f.coach.cue("Cannot overlap."), false);
+  assert.equal(f.coach.headline(""), false);
+  assert.deepEqual(transitions, [true]);
+  f.end();
+  assert.deepEqual(transitions, [true, false]);
+});

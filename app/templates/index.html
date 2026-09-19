@@ -751,286 +751,491 @@
         aria-labelledby="live-title"
         hidden
       >
-        <div class="section-heading">
-          <div>
-            <div class="eyebrow">
-              <span class="eyebrow-line"></span
-              ><span id="live-set-label">YOUR NEXT SET</span>
+        <div id="workout-live-shell">
+          <div class="section-heading">
+            <div>
+              <div class="eyebrow">
+                <span class="eyebrow-line"></span
+                ><span id="live-set-label">YOUR NEXT SET</span>
+              </div>
+              <h1 id="live-title" tabindex="-1">Your live set</h1>
+              <p class="intro">One rep at a time. Find your rhythm.</p>
             </div>
-            <h1 id="live-title" tabindex="-1">Your live set</h1>
-            <p class="intro">One rep at a time. Find your rhythm.</p>
+            <button id="live-exit" class="button secondary" type="button">
+              End workout &amp; see summary
+            </button>
           </div>
-          <button id="live-exit" class="button secondary" type="button">
-            End workout &amp; return to plan
-          </button>
-        </div>
-        <div class="live-layout">
-          <div>
-            <div class="calibration-preview workout-preview">
-              <video
-                id="workout-video"
-                playsinline
-                muted
-                aria-label="Live workout camera"
-              ></video>
-              <canvas id="workout-overlay" aria-hidden="true"></canvas>
-              <span class="preview-label"
-                ><span class="status-dot"></span> ON-DEVICE MOVEMENT
-                TRACKING</span
-              >
-              <div id="workout-placeholder" class="calibration-placeholder">
-                <svg
-                  class="body-guide"
-                  viewBox="0 0 180 300"
-                  aria-hidden="true"
+          <div class="live-layout">
+            <div>
+              <div class="calibration-preview workout-preview">
+                <video
+                  id="workout-video"
+                  playsinline
+                  muted
+                  aria-label="Live workout camera"
+                ></video>
+                <canvas id="workout-overlay" aria-hidden="true"></canvas>
+                <span class="preview-label"
+                  ><span class="status-dot"></span> ON-DEVICE MOVEMENT
+                  TRACKING</span
                 >
-                  <circle cx="90" cy="40" r="23" />
-                  <path
-                    d="M50 112q40-28 80 0M90 67v116m-40-71-13 58m93-58 13 58m-53 13-28 86m28-86 28 86"
-                  />
-                </svg>
-                <p>A little space for your next set.</p>
-                <span>Keep your full body and both arms in view.</span>
+                <div id="workout-placeholder" class="calibration-placeholder">
+                  <svg
+                    class="body-guide"
+                    viewBox="0 0 180 300"
+                    aria-hidden="true"
+                  >
+                    <circle cx="90" cy="40" r="23" />
+                    <path
+                      d="M50 112q40-28 80 0M90 67v116m-40-71-13 58m93-58 13 58m-53 13-28 86m28-86 28 86"
+                    />
+                  </svg>
+                  <p>A little space for your next set.</p>
+                  <span>Keep your full body and both arms in view.</span>
+                </div>
+                <div id="live-badge" class="calibration-badge" role="status">
+                  Assessment Unavailable
+                </div>
               </div>
-              <div id="live-badge" class="calibration-badge" role="status">
-                Assessment Unavailable
-              </div>
-            </div>
-            <p class="camera-caption">
-              <svg class="icon"><use href="#i-lock" /></svg> Movement images
-              stay on this device until you request a Gemini review. Card images
-              are never shared.
-            </p>
-            <p id="live-placement" class="live-placement"></p>
-          </div>
-          <aside class="surface live-panel">
-            <div class="live-panel-heading">
-              <span class="eyebrow small">MAKE EVERY REP YOURS</span
-              ><span class="live-indicator" aria-hidden="true"></span>
-            </div>
-            <div class="rep-display">
-              <strong id="live-count">0</strong
-              ><span>/ <span id="live-target">10</span> reps</span>
-            </div>
-            <div class="live-metrics">
-              <div>
-                <span>Set time</span><strong id="live-time">0:00</strong>
-              </div>
-              <div>
-                <span>Joint angle · estimate</span
-                ><strong id="live-angle">—</strong>
-              </div>
-            </div>
-            <p id="live-phase" class="live-phase">
-              Find your starting position
-            </p>
-            <p id="live-status" class="status-text" role="status">
-              Enable the camera to check your framing.
-            </p>
-            <div class="live-coach">
-              <span class="eyebrow small">YOUR IN-SET CUE</span>
-              <p id="live-cue">Move at your own pace.</p>
-            </div>
-            <button
-              id="live-mute"
-              class="text-button voice-toggle"
-              type="button"
-              aria-pressed="true"
-            >
-              Spoken cues on
-            </button>
-            <div class="live-actions">
-              <button
-                id="live-enable"
-                class="button primary full"
-                type="button"
-              >
-                Enable camera
-              </button>
-              <button
-                id="live-begin"
-                class="button primary full"
-                type="button"
-                disabled
-              >
-                Start set
-              </button>
-              <button
-                id="live-pause"
-                class="button secondary full"
-                type="button"
-                hidden
-              >
-                Pause set
-              </button>
-              <button id="live-finish" class="text-button" type="button" hidden>
-                End this set
-              </button>
-            </div>
-            <button
-              id="live-pain"
-              class="button pain-button full"
-              type="button"
-            >
-              Stop · I feel pain
-            </button>
-            <p class="field-hint">
-              Counts and cues are camera estimates. If a movement feels
-              uncomfortable, stop the set.
-            </p>
-          </aside>
-        </div>
-        <section
-          id="set-result"
-          class="surface set-result"
-          aria-labelledby="set-result-title"
-          hidden
-        >
-          <div class="set-result-heading">
-            <div>
-              <span class="eyebrow small">A MOMENT TO RESET</span>
-              <h2 id="set-result-title">Set complete.</h2>
-              <p id="live-rest" class="intro"></p>
-            </div>
-            <button id="live-next" class="button primary" type="button">
-              Prepare next set
-            </button>
-          </div>
-          <div class="set-result-grid">
-            <figure class="keyframe-review">
-              <img
-                id="worst-keyframe"
-                alt="Inflection position of the highest-scored completed repetition"
-                hidden
-              />
-              <figcaption id="keyframe-caption"></figcaption>
-            </figure>
-            <div>
-              <h3>Your set measurements</h3>
-              <p>
-                One frame is retained for the completed rep with the most
-                flagged form issues. Angles and cadence are estimates, not a
-                full form assessment.
+              <p class="camera-caption">
+                <svg class="icon"><use href="#i-lock" /></svg> Movement images
+                stay on this device until you request a Gemini review. Card
+                images are never shared.
               </p>
-              <p>
-                This preview is cleared when you prepare another set or leave
-                the workout.
-              </p>
-              <details>
-                <summary>View rep measurements</summary>
-                <pre id="set-data"></pre>
-              </details>
+              <p id="live-placement" class="live-placement"></p>
             </div>
-          </div>
-          <section
-            id="coach-panel"
-            class="coach-panel"
-            aria-labelledby="coach-title"
-            hidden
-          >
-            <div class="coach-intro">
-              <div>
-                <span class="eyebrow small">THE OTHER HALF OF THE PICTURE</span>
-                <h2 id="coach-title">How did that feel?</h2>
-                <p>
-                  Your experience helps put the camera’s estimates in context.
+            <aside class="surface live-panel">
+              <div class="live-panel-heading">
+                <span class="eyebrow small">MAKE EVERY REP YOURS</span
+                ><span class="live-indicator" aria-hidden="true"></span>
+              </div>
+              <div class="rep-display">
+                <strong id="live-count">0</strong
+                ><span>/ <span id="live-target">10</span> reps</span>
+              </div>
+              <div class="live-metrics">
+                <div>
+                  <span>Set time</span><strong id="live-time">0:00</strong>
+                </div>
+                <div>
+                  <span>Joint angle · estimate</span
+                  ><strong id="live-angle">—</strong>
+                </div>
+              </div>
+              <p id="live-phase" class="live-phase">
+                Find your starting position
+              </p>
+              <p id="live-status" class="status-text" role="status">
+                Enable the camera to check your framing.
+              </p>
+              <div class="live-coach">
+                <span class="eyebrow small">YOUR IN-SET CUE</span>
+                <p id="live-cue">Move at your own pace.</p>
+              </div>
+              <button
+                id="live-mute"
+                class="text-button voice-toggle"
+                type="button"
+                aria-pressed="true"
+              >
+                Spoken cues on
+              </button>
+              <div class="voice-command-box">
+                <span class="eyebrow small">HANDS-FREE, WHEN YOU WANT IT</span>
+                <p id="voice-command-privacy" class="field-hint">
+                  Your browser may send microphone audio to its speech service.
+                  Enable only when you’re ready; Spotter does not store audio.
+                  Listening pauses while Spotter speaks.
                 </p>
-              </div>
-              <span class="coach-label">POST-SET CHECK-IN</span>
-            </div>
-            <div
-              class="feedback-options"
-              role="group"
-              aria-label="Quick set feedback"
-            >
-              <button id="feedback-easy" class="button secondary" type="button">
-                Felt easy
-              </button>
-              <button
-                id="feedback-fatigue"
-                class="button secondary"
-                type="button"
-              >
-                Felt tired
-              </button>
-              <button
-                id="feedback-balance"
-                class="button secondary"
-                type="button"
-              >
-                Off-balance
-              </button>
-              <button
-                id="feedback-pain"
-                class="button pain-button"
-                type="button"
-              >
-                I felt pain · stop
-              </button>
-            </div>
-            <label class="feedback-label" for="coach-feedback"
-              >Tell us more, if you’d like</label
-            >
-            <textarea
-              id="coach-feedback"
-              rows="2"
-              maxlength="500"
-              placeholder="For example: I felt off-balance on rep 4."
-            ></textarea>
-            <p class="coach-privacy">
-              <svg class="icon"><use href="#i-lock" /></svg> Choosing “Review
-              set with Gemini” sends the displayed workout keyframe, set
-              measurements, your feedback, and selected workout preferences to
-              Google’s Gemini service. TCard images and account identifiers are
-              never included. You can continue with your current plan without a
-              review.
-            </p>
-            <div class="coach-submit-row">
-              <button id="coach-submit" class="button primary" type="button">
-                Review set with Gemini</button
-              ><button
-                id="coach-cancel"
-                class="button secondary"
-                type="button"
-                hidden
-              >
-                Cancel review
-              </button>
-            </div>
-            <p id="coach-status" class="status-text" role="status"></p>
-            <article
-              id="coach-result"
-              class="coach-result"
-              aria-labelledby="coach-headline"
-              hidden
-            >
-              <span id="coach-source" class="eyebrow small"></span>
-              <h3 id="coach-headline"></h3>
-              <ol class="coach-tips">
-                <li id="coach-tip-one"></li>
-                <li id="coach-tip-two"></li>
-              </ol>
-              <p id="coach-encouragement" class="coach-encouragement"></p>
-            </article>
-            <article
-              id="adapt-panel"
-              class="adapt-panel"
-              aria-labelledby="adapt-title"
-              hidden
-            >
-              <span class="eyebrow small">YOUR NEXT SET · YOUR CHOICE</span>
-              <h3 id="adapt-title">A small adjustment?</h3>
-              <p id="adapt-values" class="adapt-values"></p>
-              <p id="adapt-reason"></p>
-              <div class="coach-submit-row">
-                <button id="adapt-accept" class="button primary" type="button">
-                  Accept for next set</button
-                ><button id="adapt-keep" class="button secondary" type="button">
-                  Keep current plan
+                <button
+                  id="live-listen"
+                  class="button secondary full"
+                  type="button"
+                  aria-pressed="false"
+                  aria-describedby="voice-command-privacy"
+                >
+                  Enable voice commands
+                </button>
+                <p id="voice-command-status" class="field-hint" role="status">
+                  Microphone off. Button controls are always available.
+                </p>
+                <p
+                  id="voice-action-status"
+                  class="field-hint"
+                  role="status"
+                ></p>
+                <details>
+                  <summary>What can I say?</summary>
+                  <p class="field-hint">
+                    “Pause”, “Resume”, “More rest”, “That felt easy”, “I feel
+                    tired”, “I lost my balance”, “I feel pain”, “Repeat that”,
+                    or “Call for help”. Resume rechecks your camera before
+                    counting. Feedback stays in your check-in until you request
+                    a review.
+                  </p>
+                </details>
+                <button id="live-repeat" class="text-button" type="button">
+                  Repeat last cue
                 </button>
               </div>
-              <p id="adapt-status" class="field-hint" role="status"></p>
-            </article>
+              <div class="live-actions">
+                <button
+                  id="live-enable"
+                  class="button primary full"
+                  type="button"
+                >
+                  Enable camera
+                </button>
+                <button
+                  id="live-begin"
+                  class="button primary full"
+                  type="button"
+                  disabled
+                >
+                  Start set
+                </button>
+                <button
+                  id="live-pause"
+                  class="button secondary full"
+                  type="button"
+                  hidden
+                >
+                  Pause set
+                </button>
+                <button
+                  id="live-finish"
+                  class="text-button"
+                  type="button"
+                  hidden
+                >
+                  End this set
+                </button>
+              </div>
+              <button
+                id="live-pain"
+                class="button pain-button full"
+                type="button"
+              >
+                Stop · I feel pain
+              </button>
+              <button
+                id="live-help"
+                class="text-button help-button"
+                type="button"
+              >
+                Call for help · demo stop
+              </button>
+              <p class="field-hint">
+                The help command stops this session. No call or message is sent.
+              </p>
+              <p class="field-hint">
+                Counts and cues are camera estimates. If a movement feels
+                uncomfortable, stop the set.
+              </p>
+            </aside>
+          </div>
+          <section
+            id="set-result"
+            class="surface set-result"
+            aria-labelledby="set-result-title"
+            hidden
+          >
+            <div class="set-result-heading">
+              <div>
+                <span class="eyebrow small">A MOMENT TO RESET</span>
+                <h2 id="set-result-title">Set complete.</h2>
+                <p id="live-rest" class="intro"></p>
+                <button id="live-more-rest" class="text-button" type="button">
+                  Add 30 seconds rest
+                </button>
+              </div>
+              <button id="live-next" class="button primary" type="button">
+                Prepare next set
+              </button>
+            </div>
+            <div class="set-result-grid">
+              <figure class="keyframe-review">
+                <img
+                  id="worst-keyframe"
+                  alt="Inflection position of the highest-scored completed repetition"
+                  hidden
+                />
+                <figcaption id="keyframe-caption"></figcaption>
+              </figure>
+              <div>
+                <h3>Your set measurements</h3>
+                <p>
+                  One frame is retained for the completed rep with the most
+                  flagged form issues. Angles and cadence are estimates, not a
+                  full form assessment.
+                </p>
+                <p>
+                  One worst-rep still per set is kept for your session replay,
+                  in page memory only. Leaving the summary or signing out clears
+                  it.
+                </p>
+                <details>
+                  <summary>View rep measurements</summary>
+                  <pre id="set-data"></pre>
+                </details>
+              </div>
+            </div>
+            <section
+              id="coach-panel"
+              class="coach-panel"
+              aria-labelledby="coach-title"
+              hidden
+            >
+              <div class="coach-intro">
+                <div>
+                  <span class="eyebrow small"
+                    >THE OTHER HALF OF THE PICTURE</span
+                  >
+                  <h2 id="coach-title">How did that feel?</h2>
+                  <p>
+                    Your experience helps put the camera’s estimates in context.
+                  </p>
+                </div>
+                <span class="coach-label">POST-SET CHECK-IN</span>
+              </div>
+              <div
+                class="feedback-options"
+                role="group"
+                aria-label="Quick set feedback"
+              >
+                <button
+                  id="feedback-easy"
+                  class="button secondary"
+                  type="button"
+                >
+                  Felt easy
+                </button>
+                <button
+                  id="feedback-fatigue"
+                  class="button secondary"
+                  type="button"
+                >
+                  Felt tired
+                </button>
+                <button
+                  id="feedback-balance"
+                  class="button secondary"
+                  type="button"
+                >
+                  Off-balance
+                </button>
+                <button
+                  id="feedback-pain"
+                  class="button pain-button"
+                  type="button"
+                >
+                  I felt pain · stop
+                </button>
+              </div>
+              <label class="feedback-label" for="coach-feedback"
+                >Tell us more, if you’d like</label
+              >
+              <textarea
+                id="coach-feedback"
+                rows="2"
+                maxlength="500"
+                placeholder="For example: I felt off-balance on rep 4."
+              ></textarea>
+              <div class="effort-field">
+                <label for="set-effort">Your effort · optional</label>
+                <select id="set-effort">
+                  <option value="">Not rated</option>
+                  <option value="1">1 · Very light</option>
+                  <option value="2">2</option>
+                  <option value="3">3</option>
+                  <option value="4">4</option>
+                  <option value="5">5 · Moderate</option>
+                  <option value="6">6</option>
+                  <option value="7">7</option>
+                  <option value="8">8</option>
+                  <option value="9">9</option>
+                  <option value="10">10 · Maximum effort</option>
+                </select>
+                <p class="field-hint">
+                  Self-reported effort is kept for this session’s summary.
+                </p>
+              </div>
+              <p class="coach-privacy">
+                <svg class="icon"><use href="#i-lock" /></svg> Choosing “Review
+                set with Gemini” sends the displayed workout keyframe, set
+                measurements, your feedback, and selected workout preferences to
+                Google’s Gemini service. TCard images and account identifiers
+                are never included. You can continue with your current plan
+                without a review.
+              </p>
+              <div class="coach-submit-row">
+                <button id="coach-submit" class="button primary" type="button">
+                  Review set with Gemini</button
+                ><button
+                  id="coach-cancel"
+                  class="button secondary"
+                  type="button"
+                  hidden
+                >
+                  Cancel review
+                </button>
+              </div>
+              <p id="coach-status" class="status-text" role="status"></p>
+              <article
+                id="coach-result"
+                class="coach-result"
+                aria-labelledby="coach-headline"
+                hidden
+              >
+                <span id="coach-source" class="eyebrow small"></span>
+                <h3 id="coach-headline"></h3>
+                <ol class="coach-tips">
+                  <li id="coach-tip-one"></li>
+                  <li id="coach-tip-two"></li>
+                </ol>
+                <p id="coach-encouragement" class="coach-encouragement"></p>
+              </article>
+              <article
+                id="adapt-panel"
+                class="adapt-panel"
+                aria-labelledby="adapt-title"
+                hidden
+              >
+                <span class="eyebrow small">YOUR NEXT SET · YOUR CHOICE</span>
+                <h3 id="adapt-title">A small adjustment?</h3>
+                <p id="adapt-values" class="adapt-values"></p>
+                <p id="adapt-reason"></p>
+                <div class="coach-submit-row">
+                  <button
+                    id="adapt-accept"
+                    class="button primary"
+                    type="button"
+                  >
+                    Accept for next set</button
+                  ><button
+                    id="adapt-keep"
+                    class="button secondary"
+                    type="button"
+                  >
+                    Keep current plan
+                  </button>
+                </div>
+                <p id="adapt-status" class="field-hint" role="status"></p>
+              </article>
+            </section>
+          </section>
+        </div>
+        <section id="session-summary" aria-labelledby="summary-title" hidden>
+          <div
+            id="summary-help"
+            class="help-notice"
+            role="alert"
+            tabindex="-1"
+            hidden
+          >
+            <strong>SIMULATION / DEMO MODE</strong>
+            <h2>Help requested. Session stopped.</h2>
+            <p>
+              No call or message was sent. Ask someone nearby for help; use your
+              phone to contact local emergency services if needed.
+            </p>
+          </div>
+          <div class="section-heading">
+            <div>
+              <div class="eyebrow">
+                <span class="eyebrow-line"></span>YOUR SESSION, REFLECTED
+              </div>
+              <h1 id="summary-title" tabindex="-1">Every rep adds up.</h1>
+              <p class="intro">A moment to look back before moving forward.</p>
+            </div>
+            <button id="summary-exit" class="button secondary" type="button">
+              Clear session &amp; return to plan
+            </button>
+          </div>
+          <div class="summary-stats surface">
+            <div>
+              <strong id="summary-reps">0</strong><span>Measured reps</span>
+            </div>
+            <div>
+              <strong id="summary-sets">0 / 0</strong
+              ><span>Targets reached / sets ended</span>
+            </div>
+            <div>
+              <strong id="summary-time">0:00</strong
+              ><span>Active set time</span>
+            </div>
+            <div>
+              <strong id="summary-effort">Not rated</strong
+              ><span>Average reported effort</span>
+            </div>
+          </div>
+          <p class="field-hint">
+            Volume counts completed, visible reps only. Unfinished reps are
+            excluded. Angles and form flags are camera estimates; unrated effort
+            is not inferred.
+          </p>
+          <div id="summary-exercises" class="summary-exercises"></div>
+          <div class="summary-grid">
+            <section
+              class="surface replay-panel"
+              aria-labelledby="replay-title"
+            >
+              <span class="eyebrow small"
+                >WORST-REP KEYFRAMES · ONE PER SET</span
+              >
+              <h2 id="replay-title">Replay the moments that matter.</h2>
+              <p class="field-hint">
+                A sequence of captured inflection stills, not a continuous
+                video. Frames stay in page memory and are cleared when you
+                leave.
+              </p>
+              <figure class="session-replay-image">
+                <img
+                  id="replay-image"
+                  alt="Selected completed-rep inflection keyframe"
+                  hidden
+                />
+                <p id="replay-empty">No completed-rep keyframe is available.</p>
+              </figure>
+              <p id="replay-caption" class="replay-caption"></p>
+              <p id="replay-detail" class="field-hint"></p>
+              <label class="field-hint" for="replay-slider"
+                >Selected highlight
+                <span id="replay-position">0 / 0</span></label
+              ><input
+                id="replay-slider"
+                type="range"
+                min="0"
+                max="0"
+                value="0"
+              />
+              <div class="replay-actions">
+                <button id="replay-prev" class="button secondary" type="button">
+                  Previous</button
+                ><button id="replay-play" class="button primary" type="button">
+                  Play keyframes</button
+                ><button
+                  id="replay-next"
+                  class="button secondary"
+                  type="button"
+                >
+                  Next
+                </button>
+              </div>
+            </section>
+            <section class="surface summary-focus-panel">
+              <span class="eyebrow small">TAKE THIS WITH YOU</span>
+              <h2>A focus for next time.</h2>
+              <ul id="summary-focus"></ul>
+              <p class="field-hint">
+                Based on this session’s measured flags and your reports. This is
+                general movement guidance.
+              </p>
+            </section>
+          </div>
+          <section class="surface summary-record">
+            <h2>Your set-by-set check-ins.</h2>
+            <ol id="summary-set-list"></ol>
           </section>
         </section>
       </section>

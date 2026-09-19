@@ -410,9 +410,11 @@ $("change-email").addEventListener("click", () => {
 $("sign-out").addEventListener("click", (event) => {
   scanner.stop();
   calibration.stop();
-  liveWorkout.pause();
-  liveWorkout.voice.stop();
-  liveWorkout.review.reset();
+  liveWorkout.dispose();
+  if (state.view === "workout") {
+    renderWorkout();
+    showView("plan");
+  }
   action(event.currentTarget, "global-error", async () => {
     await api("/api/logout", {});
     resetSessionView();

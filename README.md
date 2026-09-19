@@ -1,8 +1,8 @@
-# Spotter — Phase 3
+# Spotter — Phase 4
 
-Spotter is a local hackathon demo for TCard-style check-in, personalized workout setup, live squat/curl tracking, and **multimodal Gemini set reviews**. Phase 3 combines the worst-rep image, measured movement, user feedback, and session preferences; speaks a structured coaching headline; and proposes changes to the next set. Reported pain stops the exercise immediately. Voice commands, session replay, and SOS remain outside this phase.
+Spotter is a local hackathon demo for TCard-style check-in, personalized workouts, live squat/curl tracking, multimodal Gemini reviews, and **hands-free workout commands with session summaries and keyframe replay**. Phase 4 adds opt-in speech recognition, effort ratings, measured form trends, and a temporary session journal. “Call for help” stops the session locally with a clear demo/no-dispatch notice. Emergency profiles and simulated handoff await Phase 5.
 
-See the [Phase 3 specification and verification procedure](docs/phase-3.md) for the API, privacy behavior, adaptation rules, and acceptance checks.
+See the [Phase 4 specification and verification procedure](docs/phase-4.md) for commands, data lifetime, replay limits, and acceptance checks. The [Phase 3 specification](docs/phase-3.md) documents Gemini integration and adaptation.
 
 ## Run locally
 
@@ -30,7 +30,8 @@ On Windows, activate the environment with `.venv\Scripts\activate`. Open [Spotte
 4. Start camera calibration. Keep shoulders, elbows, wrists, hips, knees, and ankles visible. After 1.2 seconds of confident, uninterrupted full-body visibility, confirm camera setup. Missing or stale frames keep confirmation disabled.
 5. Choose **Start workout**, enable the live-set camera, and select **Start set** after a fresh framing check. Complete squats or bilateral curls while following the rep/angle/timer HUD and brief spoken cues. Pause, resume, mute, or end the set with visible controls.
 6. Review the worst completed rep’s image and measurements. Choose how the set felt and **Review set with Gemini** to send the displayed workout frame for analysis. Without a configured API key, local guidance is clearly labelled.
-7. Accept the proposed next-set reps/rest or keep your current settings. Report pain with the visible stop button or feedback control to end that exercise immediately. Leaving the workout clears images, reviews, and temporary changes.
+7. Accept the proposed next-set reps/rest or keep your current settings. Report pain with the visible stop button or feedback control to end that exercise immediately. Enable voice commands if desired; speak feedback without automatically requesting a review. Rate each set’s effort from 1–10.
+8. End the workout to view measured volume, form trends, self-reported effort, and one worst-rep inflection still per set. Clear the summary to release all session data. The microphone is opt-in, may use the browser vendor’s speech service, and turns off when the page is hidden or the session ends.
 
 The seeded account is **Terry Lee**, UTORid `leeterry`, student ID `1234567890`, demo email `terry.lee@example.com`. The barcode is a public demo account selector: it does **not** verify a person's identity, academic standing, or University affiliation. This is not University SSO.
 
@@ -47,12 +48,14 @@ python -m pytest -q
 npm test
 ```
 
-Verified: **168 Python tests passed, one optional legacy test skipped; 118 JavaScript tests passed**. Dependency checks passed. Verification includes authentication/CSRF and request limits, real JPEG validation, strict structured coaching, provider failures, actual SDK request serialization through a mocked HTTP transport, pain aborts, cancellation races, native headline speech, and accepted/declined next-set adjustments. See the [Phase 3 verification procedure](docs/phase-3.md#verification-procedure-and-results) for commands and manual checks.
+**Verified:** 187 JavaScript tests passed; 168 Python tests passed, with one optional legacy test skipped.
 
-Browser checks cover synthetic tracking → authenticated coach request → labelled missing-key fallback → adaptation acceptance, plus pain overriding the proposal and a 390-pixel layout. No API key was configured during development; successful live Gemini output and physical webcam/audio behavior remain manual checks.
+Verification covers authenticated requests, Gemini serialization/fallback, pain aborts, movement tracking, command parsing and microphone lifecycle, spoken-cue echo protection, camera-gated resume, bounded rest, summary calculations, replay memory limits, and cleanup. See the [Phase 4 verification procedure](docs/phase-4.md#verification).
 
-Run `.venv/bin/python scripts/browser-smoke.py` for [the Phase 3 synthetic fixture](http://127.0.0.1:5056/test-coach), [the camera dependency fixture](http://127.0.0.1:5056/test-camera), or [the movement fixture](http://127.0.0.1:5056/test-workout). These routes exist only in the separate loopback test server, never in the normal application.
+Browser checks cover synthetic tracking, simulated speech → check-in without upload, summary totals/effort, available and missing replay frames, playback, help stopping without dispatch, cleanup, and a 390-pixel layout. Real microphone recognition and physical webcam behavior remain manual checks. A Gemini API key is still required to verify successful live provider output.
+
+Run `.venv/bin/python scripts/browser-smoke.py` for [the Phase 4 fixture](http://127.0.0.1:5056/test-session), [the coach fixture](http://127.0.0.1:5056/test-coach), [the camera dependency fixture](http://127.0.0.1:5056/test-camera), or [the movement fixture](http://127.0.0.1:5056/test-workout). These routes exist only in the separate loopback test server, never in the normal application.
 
 The old Python camera prototype remains in `app/pose`, `app/exercises`, and `app/feedback`; the browser app does not invoke it. Its optional dependencies are in `requirements-legacy.txt` for a separate Python 3.11 environment. The current `/video_feed` endpoint is removed.
 
-See the [Phase 1 baseline](docs/phase-1.md), [Phase 2 tracking specification](docs/phase-2.md), and [current Phase 3 specification](docs/phase-3.md). Earlier phase documents describe their implementation snapshots; Phase 3 introduces the explicit workout-frame review upload.
+See the [Phase 1 baseline](docs/phase-1.md), [Phase 2 tracking specification](docs/phase-2.md), and [Phase 3 coaching specification](docs/phase-3.md). Earlier phase documents describe implementation snapshots. The [current Phase 4 specification](docs/phase-4.md) adds optional browser speech recognition and bounded session replay.
