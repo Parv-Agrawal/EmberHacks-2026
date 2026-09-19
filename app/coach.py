@@ -73,7 +73,9 @@ def coach_config():
     return types.GenerateContentConfig(
         system_instruction=SYSTEM_INSTRUCTION,
         response_mime_type="application/json",
-        response_schema=CoachFeedback,
+        # Pydantic emits JSON Schema (including additionalProperties).
+        # Send it through the JSON Schema field, not the narrower legacy Schema.
+        response_json_schema=CoachFeedback.model_json_schema(),
         temperature=0.3,
         max_output_tokens=4096,
         thinking_config=types.ThinkingConfig(thinking_level=types.ThinkingLevel.LOW),
@@ -328,9 +330,12 @@ def generate_coaching(summary, feedback, image_bytes, preferences):
         except (ValidationError, ValueError, TypeError, AttributeError):
             return fallback, "fallback", "invalid_response"
         return result, "gemini", None
-    except Exception:
-        # SDK/network exception text can contain payloads or credentials. Do not log it.
-        return fallback, "fallback", "provider_unavailable"
+    except Exception as error:
+        # Surface only allowlisted categories, never provider text or credentials.
+        reason = {429: "provider_rate_limited", 503: "provider_busy",
+                  401: "invalid_api_key", 403: "provider_access_denied"}.get(
+                      getattr(error, "code", None), "provider_unavailable")
+        return fallback, "fallback", reason
     finally:
         if client is not None:
             try:
