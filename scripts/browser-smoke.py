@@ -11,7 +11,7 @@ import sys
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PROJECT_ROOT))
 
-from flask import send_file
+from flask import render_template, send_file
 from app import create_app
 
 
@@ -28,6 +28,18 @@ def create_smoke_app():
         response = send_file(PROJECT_ROOT / "tests/browser/camera-smoke.html", max_age=0)
         response.headers["Cache-Control"] = "no-store"
         return response
+
+    @app.get("/test-workout")
+    def workout_smoke():
+        # Isolated synthetic controller fixture. Never registered by create_app.
+        html = render_template("index.html").replace(
+            '/static/js/main.js', '/test-workout.js'
+        )
+        return html, {"Cache-Control": "no-store"}
+
+    @app.get("/test-workout.js")
+    def workout_fixture_script():
+        return send_file(PROJECT_ROOT / "tests/browser/workout-smoke.js", max_age=0)
 
     return app
 

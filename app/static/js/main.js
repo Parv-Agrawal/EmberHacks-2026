@@ -1,3 +1,4 @@
+import { LiveWorkout } from "./live-workout.js";
 import { BarcodeScanner } from "./barcode.js";
 import { CameraCalibration, MAX_FRAME_AGE_MS } from "./calibration.js";
 
@@ -96,6 +97,7 @@ async function action(button, errorId, task, scope) {
 
 function showView(view, { focus = true } = {}) {
   state.view = view;
+  liveWorkout.dispose();
   scanner.stop();
   calibration.stop();
   state.calibration = null;
@@ -106,7 +108,7 @@ function showView(view, { focus = true } = {}) {
   document.querySelectorAll(".view").forEach((section) => {
     section.hidden = section.id !== `view-${view}`;
   });
-  const current = view === "ready" ? 4 : steps.indexOf(view);
+  const current = ["ready", "workout"].includes(view) ? 4 : steps.indexOf(view);
   document.querySelectorAll("[data-step]").forEach((item, index) => {
     item.classList.toggle("complete", index < current);
     if (index === current) item.setAttribute("aria-current", "step");
@@ -400,6 +402,8 @@ $("change-email").addEventListener("click", () => {
 $("sign-out").addEventListener("click", (event) => {
   scanner.stop();
   calibration.stop();
+  liveWorkout.pause();
+  liveWorkout.voice.stop();
   action(event.currentTarget, "global-error", async () => {
     await api("/api/logout", {});
     resetSessionView();
@@ -644,8 +648,18 @@ $("finish-calibration").addEventListener("click", () => {
     `${state.workout.exercises.length} exercise${state.workout.exercises.length === 1 ? "" : "s"} planned`;
   showView("ready");
 });
-$("ready-recheck").addEventListener("click", () => showView("calibration"));
+const liveWorkout = new LiveWorkout({
+  onExit: () => {
+    renderWorkout();
+    showView("plan");
+  },
+});
+$("ready-start").addEventListener("click", () => {
+  showView("workout");
+  liveWorkout.open(state.workout);
+});
 window.addEventListener("pagehide", () => {
+  liveWorkout.dispose();
   scanner.stop();
   calibration.stop();
   audioContext?.close().catch(() => {});

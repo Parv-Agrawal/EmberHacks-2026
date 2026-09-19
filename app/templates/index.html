@@ -352,7 +352,8 @@
             <span id="greeting-name">TERRY</span>
           </div>
           <h1 id="onboarding-title" tabindex="-1">
-            Your pace.<br /> Your starting point<span class="accent-dot">.</span>
+            Your pace.<br />
+            Your starting point<span class="accent-dot">.</span>
           </h1>
           <p class="intro">
             Tell us a little about today. We’ll put together a simple workout
@@ -733,16 +734,187 @@
           </div>
         </div>
         <p class="ready-description">
-          This demo currently covers check-in, workout planning, and camera
-          setup.
+          You’re ready for live rep tracking. We’ll check your framing again
+          before counting your first set.
         </p>
         <div class="ready-actions">
           <button id="ready-edit" class="button secondary" type="button">
             Edit my workout</button
-          ><button id="ready-recheck" class="button primary" type="button">
-            Recheck camera <svg class="icon"><use href="#i-camera" /></svg>
+          ><button id="ready-start" class="button primary" type="button">
+            Start workout <svg class="icon"><use href="#i-arrow" /></svg>
           </button>
         </div>
+      </section>
+      <section
+        id="view-workout"
+        class="view"
+        aria-labelledby="live-title"
+        hidden
+      >
+        <div class="section-heading">
+          <div>
+            <div class="eyebrow">
+              <span class="eyebrow-line"></span
+              ><span id="live-set-label">YOUR NEXT SET</span>
+            </div>
+            <h1 id="live-title" tabindex="-1">Your live set</h1>
+            <p class="intro">One rep at a time. Find your rhythm.</p>
+          </div>
+          <button id="live-exit" class="button secondary" type="button">
+            End workout &amp; return to plan
+          </button>
+        </div>
+        <div class="live-layout">
+          <div>
+            <div class="calibration-preview workout-preview">
+              <video
+                id="workout-video"
+                playsinline
+                muted
+                aria-label="Live workout camera"
+              ></video>
+              <canvas id="workout-overlay" aria-hidden="true"></canvas>
+              <span class="preview-label"
+                ><span class="status-dot"></span> ON-DEVICE MOVEMENT
+                TRACKING</span
+              >
+              <div id="workout-placeholder" class="calibration-placeholder">
+                <svg
+                  class="body-guide"
+                  viewBox="0 0 180 300"
+                  aria-hidden="true"
+                >
+                  <circle cx="90" cy="40" r="23" />
+                  <path
+                    d="M50 112q40-28 80 0M90 67v116m-40-71-13 58m93-58 13 58m-53 13-28 86m28-86 28 86"
+                  />
+                </svg>
+                <p>A little space for your next set.</p>
+                <span>Keep your full body and both arms in view.</span>
+              </div>
+              <div id="live-badge" class="calibration-badge" role="status">
+                Assessment Unavailable
+              </div>
+            </div>
+            <p class="camera-caption">
+              <svg class="icon"><use href="#i-lock" /></svg> Movement images
+              stay in this page’s memory. Nothing is uploaded or saved to disk.
+            </p>
+            <p id="live-placement" class="live-placement"></p>
+          </div>
+          <aside class="surface live-panel">
+            <div class="live-panel-heading">
+              <span class="eyebrow small">MAKE EVERY REP YOURS</span
+              ><span class="live-indicator" aria-hidden="true"></span>
+            </div>
+            <div class="rep-display">
+              <strong id="live-count">0</strong
+              ><span>/ <span id="live-target">10</span> reps</span>
+            </div>
+            <div class="live-metrics">
+              <div>
+                <span>Set time</span><strong id="live-time">0:00</strong>
+              </div>
+              <div>
+                <span>Joint angle · estimate</span
+                ><strong id="live-angle">—</strong>
+              </div>
+            </div>
+            <p id="live-phase" class="live-phase">
+              Find your starting position
+            </p>
+            <p id="live-status" class="status-text" role="status">
+              Enable the camera to check your framing.
+            </p>
+            <div class="live-coach">
+              <span class="eyebrow small">YOUR IN-SET CUE</span>
+              <p id="live-cue">Move at your own pace.</p>
+            </div>
+            <button
+              id="live-mute"
+              class="text-button voice-toggle"
+              type="button"
+              aria-pressed="true"
+            >
+              Spoken cues on
+            </button>
+            <div class="live-actions">
+              <button
+                id="live-enable"
+                class="button primary full"
+                type="button"
+              >
+                Enable camera
+              </button>
+              <button
+                id="live-begin"
+                class="button primary full"
+                type="button"
+                disabled
+              >
+                Start set
+              </button>
+              <button
+                id="live-pause"
+                class="button secondary full"
+                type="button"
+                hidden
+              >
+                Pause set
+              </button>
+              <button id="live-finish" class="text-button" type="button" hidden>
+                End this set
+              </button>
+            </div>
+            <p class="field-hint">
+              Counts and cues are camera estimates. If a movement feels
+              uncomfortable, stop the set.
+            </p>
+          </aside>
+        </div>
+        <section
+          id="set-result"
+          class="surface set-result"
+          aria-labelledby="set-result-title"
+          hidden
+        >
+          <div class="set-result-heading">
+            <div>
+              <span class="eyebrow small">A MOMENT TO RESET</span>
+              <h2 id="set-result-title">Set complete.</h2>
+              <p id="live-rest" class="intro"></p>
+            </div>
+            <button id="live-next" class="button primary" type="button">
+              Prepare next set
+            </button>
+          </div>
+          <div class="set-result-grid">
+            <figure class="keyframe-review">
+              <img
+                id="worst-keyframe"
+                alt="Inflection position of the highest-scored completed repetition"
+                hidden
+              />
+              <figcaption id="keyframe-caption"></figcaption>
+            </figure>
+            <div>
+              <h3>Your set measurements</h3>
+              <p>
+                One frame is retained for the completed rep with the most
+                flagged form issues. Angles and cadence are estimates, not a
+                full form assessment.
+              </p>
+              <p>
+                This preview is cleared when you prepare another set or leave
+                the workout.
+              </p>
+              <details>
+                <summary>View rep measurements</summary>
+                <pre id="set-data"></pre>
+              </details>
+            </div>
+          </div>
+        </section>
       </section>
     </main>
     <footer class="site-footer">

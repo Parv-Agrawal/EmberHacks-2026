@@ -125,10 +125,16 @@ export class CalibrationGate {
 }
 
 export class CameraCalibration {
-  constructor(video, canvas, { onUpdate = () => {} } = {}) {
+  constructor(
+    video,
+    canvas,
+    { onUpdate = () => {}, onFrame = () => {}, snapshotFrames = false } = {},
+  ) {
     this.video = video;
     this.canvas = canvas;
     this.onUpdate = onUpdate;
+    this.onFrame = onFrame;
+    this.frameCanvas = snapshotFrames ? document.createElement("canvas") : null;
     this.generation = 0;
     this.gate = new CalibrationGate();
     this.frameRequest = null;
@@ -250,13 +256,37 @@ export class CameraCalibration {
       try {
         this.lastInferenceAt = now;
         this.lastVideoTime = this.video.currentTime;
-        const result = this.landmarker.detectForVideo(this.video, now);
+        // Live sets infer and encode from the same frozen pixels. The video
+        // decoder may otherwise advance while synchronous inference runs.
+        const source = this.frameCanvas || this.video;
+        if (this.frameCanvas) {
+          sizeOverlay(this.video, this.frameCanvas);
+          const context = this.frameCanvas.getContext("2d");
+          if (!context) throw new Error("Frame buffer unavailable.");
+          context.drawImage(
+            this.video,
+            0,
+            0,
+            this.frameCanvas.width,
+            this.frameCanvas.height,
+          );
+        }
+        const result = this.landmarker.detectForVideo(source, now);
         const observedAt = performance.now();
         this.lastFrameAt = now;
         const landmarks = result.landmarks?.[0];
         const state = this.gate.update(landmarks, observedAt, now);
         this.draw(landmarks, state.ready);
         this.emit(state);
+        this.onFrame({
+          landmarks,
+          worldLandmarks: result.worldLandmarks?.[0],
+          now: observedAt,
+          capturedAt: now,
+          width: this.video.videoWidth,
+          height: this.video.videoHeight,
+          imageSource: source,
+        });
       } catch {
         this.stop();
         this.emit({
@@ -265,6 +295,10 @@ export class CameraCalibration {
             "Assessment Unavailable. The joint visibility check stopped. Restart the camera or reload this page.",
         });
         return;
+      } finally {
+        this.frameCanvas
+          ?.getContext("2d")
+          ?.clearRect(0, 0, this.frameCanvas.width, this.frameCanvas.height);
       }
     }
     if (generation === this.generation)
@@ -328,6 +362,10 @@ export class CameraCalibration {
     this.camera.stop();
     this.landmarker?.close();
     this.landmarker = null;
+    if (this.frameCanvas) {
+      this.frameCanvas.width = 0;
+      this.frameCanvas.height = 0;
+    }
     this.gate.reset();
     this.lastVideoTime = -1;
     this.lastInferenceAt = -Infinity;
