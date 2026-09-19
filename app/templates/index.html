@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Squat form checker</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <h1>Squat form checker</h1>
+
+    <div class="layout">
+        <div class="video-panel">
+            <img src="{{ url_for('main.video_feed') }}" alt="Live pose-tracked video feed">
+        </div>
+
+        <div class="tips-panel">
+            <h2>Cues</h2>
+            <ul>
+                {% for cue in tips.cues %}
+                <li>{{ cue }}</li>
+                {% endfor %}
+            </ul>
+            {% if tips.reference_video %}
+            <p><a href="{{ tips.reference_video }}" target="_blank">Reference video</a></p>
+            {% endif %}
+        </div>
+    </div>
+
+    <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+</body>
+</html>

@@ -1,0 +1,60 @@
+/* app/static/css/style.css */
+body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    margin: 0;
+    padding: 2rem;
+    background-color: #f9fafb;
+    color: #1f2937;
+}
+
+h1 {
+    text-align: center;
+    margin-bottom: 2rem;
+    color: #111827;
+}
+
+.layout {
+    display: flex;
+    gap: 2rem;
+    align-items: flex-start;
+    justify-content: center;
+    flex-wrap: wrap; /* Allows panels to stack on mobile */
+}
+
+.video-panel {
+    background: #000;
+    border-radius: 12px;
+    padding: 4px;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+}
+
+.video-panel img {
+    display: block;
+    max-width: 640px;
+    width: 100%;
+    border-radius: 8px;
+}
+
+.tips-panel {
+    background: white;
+    padding: 1.5rem;
+    border-radius: 12px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    max-width: 300px;
+    width: 100%;
+}
+
+.tips-panel h2 {
+    margin-top: 0;
+    font-size: 1.25rem;
+    border-bottom: 2px solid #e5e7eb;
+    padding-bottom: 0.5rem;
+}
+
+.tips-panel ul {
+    padding-left: 1.5rem;
+}
+
+.tips-panel li {
+    margin-bottom: 0.5rem;
+}
