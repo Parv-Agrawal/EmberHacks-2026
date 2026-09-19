@@ -186,7 +186,9 @@ export class SessionReplay {
     if (next) next.disabled = !count || this.index >= count - 1;
     if (play) {
       play.disabled = count < 2;
-      play.textContent = this.playing ? "Pause keyframes" : "Play keyframes";
+      play.textContent = count === 1
+        ? "Only one keyframe saved"
+        : this.playing ? "Pause keyframes" : "Play keyframes";
       play.setAttribute("aria-pressed", String(this.playing));
     }
     if (slider) {
@@ -211,7 +213,7 @@ export class SessionReplay {
       image.hidden = !entry?.image;
       if (entry?.image) {
         image.src = entry.image;
-        image.alt = `${entry.exerciseName}, set ${entry.setNumber}, rep ${entry.rep.rep_number}, worst-rep ${entry.exerciseId === "bicep_curl" ? "curl inflection" : "bottom"} keyframe`;
+        image.alt = `${entry.exerciseName}, set ${entry.setNumber}, rep ${entry.rep.rep_number}, ${entry.exerciseId === "bicep_curl" ? "curl inflection" : "bottom"} keyframe`;
       } else {
         image.removeAttribute("src");
         image.alt = "";
@@ -229,8 +231,8 @@ export class SessionReplay {
         : "0 highlights";
     if (caption)
       caption.textContent = entry
-        ? `${entry.exerciseName} · Set ${entry.setNumber} · Rep ${entry.rep.rep_number} · Worst-rep ${entry.exerciseId === "bicep_curl" ? "curl inflection" : "bottom"} keyframe`
-        : "Worst-rep keyframe replay";
+        ? `${entry.exerciseName} · Set ${entry.setNumber} · Rep ${entry.rep.rep_number} · ${entry.exerciseId === "bicep_curl" ? "Curl inflection" : "Bottom"} keyframe`
+        : "Completed-rep keyframe replay";
     if (detail)
       detail.textContent = entry
         ? this.describe(entry.rep, entry.exerciseId)

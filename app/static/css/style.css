@@ -1347,73 +1347,6 @@ textarea::placeholder {
 .calibration-guide .button + .button {
   margin-top: 9px;
 }
-.ready-layout {
-  text-align: center;
-  padding: 45px 0 80px;
-}
-.ready-layout > .eyebrow {
-  justify-content: center;
-  margin-top: 32px;
-}
-.ready-layout h1 {
-  font-size: 44px;
-  letter-spacing: -2px;
-}
-.ready-orbit {
-  width: 120px;
-  height: 120px;
-  border-radius: 50%;
-  border: 1px dashed #cdd9b3;
-  display: grid;
-  place-items: center;
-  margin: auto;
-}
-.ready-orbit > span {
-  width: 84px;
-  height: 84px;
-  border-radius: 50%;
-  background: var(--lime);
-  display: grid;
-  place-items: center;
-  color: #3f5320;
-}
-.ready-orbit .icon {
-  width: 36px;
-  height: 36px;
-  stroke-width: 2;
-}
-.ready-summary {
-  display: flex;
-  justify-content: center;
-  gap: 32px;
-  padding: 23px 28px;
-  width: max-content;
-  max-width: 100%;
-  margin: 30px auto 0;
-  border-radius: 14px;
-}
-.ready-summary > div {
-  display: flex;
-  gap: 7px;
-  align-items: center;
-  font-size: 11px;
-}
-.ready-summary .icon {
-  width: 15px;
-  height: 15px;
-  color: #739140;
-}
-.ready-actions {
-  display: flex;
-  gap: 12px;
-  justify-content: center;
-  margin-top: 25px;
-}
-.ready-description {
-  font-size: 12px;
-  color: #8a937a;
-  margin-top: 22px;
-}
 .noscript-notice {
   position: fixed;
   bottom: 0;
@@ -1627,15 +1560,6 @@ textarea::placeholder {
   }
   .site-footer {
     margin: 0 24px;
-  }
-  .ready-layout h1 {
-    font-size: 36px;
-  }
-  .ready-summary {
-    gap: 20px;
-  }
-  .ready-summary > div {
-    font-size: 10px;
   }
 }
 @media (max-width: 600px) {
@@ -1855,40 +1779,6 @@ textarea::placeholder {
   }
   .footer-private {
     display: none;
-  }
-  .ready-layout {
-    padding-top: 35px;
-  }
-  .ready-layout h1 {
-    font-size: 35px;
-  }
-  .ready-summary {
-    flex-direction: column;
-    text-align: left;
-    gap: 16px;
-    width: 100%;
-    max-width: 320px;
-  }
-  .ready-summary > div {
-    font-size: 11px;
-  }
-  .ready-description {
-    font-size: 11px;
-    line-height: 1.8;
-  }
-  .ready-actions {
-    gap: 10px;
-  }
-  .ready-actions .button {
-    font-size: 10px;
-  }
-  .ready-orbit {
-    width: 100px;
-    height: 100px;
-  }
-  .ready-orbit > span {
-    width: 70px;
-    height: 70px;
   }
 }
 @media (prefers-reduced-motion: reduce) {

@@ -69,6 +69,28 @@ test("stale or future timestamps never produce valid framing", () => {
   assert.equal(evaluateLandmarks(fullBody(), { now: NaN }).allVisible, false);
 });
 
+test("live framing uses the selected exercise while setup still checks the full body", () => {
+  for (const [exerciseId, irrelevant, required] of [
+    ["squat", [13, 14, 15, 16], [11, 12, 23, 24, 25, 26, 27, 28]],
+    ["bicep_curl", [25, 26, 27, 28], [11, 12, 13, 14, 15, 16, 23, 24]],
+  ]) {
+    const body = fullBody();
+    for (const index of irrelevant) body[index].visibility = 0.1;
+    assert.equal(evaluateLandmarks(body).allVisible, false);
+    const gate = new CalibrationGate({ exerciseId });
+    for (let now = 0; now <= REQUIRED_STABLE_MS; now += 100)
+      gate.update(body, now);
+    assert.equal(gate.update(body, 1300).ready, true);
+    for (const index of required) {
+      const missing = structuredClone(body);
+      missing[index].visibility = 0.1;
+      assert.equal(evaluateLandmarks(missing, { exerciseId }).allVisible, false);
+    }
+    body[required[0]].visibility = 0.1;
+    assert.equal(gate.update(body, 1400).ready, false);
+  }
+});
+
 test("readiness needs 1.2 uninterrupted seconds and drops on the first lost joint", () => {
   const gate = new CalibrationGate();
   for (let now = 0; now < REQUIRED_STABLE_MS; now += 100)

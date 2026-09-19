@@ -38,7 +38,7 @@ def create_app(test_config=None):
     @app.before_request
     def protect_api():
         # Flask's per-request limit keeps the original sign-in/intake boundary.
-        # Only the coach endpoint accepts a small, explicitly submitted exercise JPEG.
+        # Only the coach endpoint accepts an explicitly submitted, bounded keyframe batch.
         if request.path == "/api/coach" and request.method == "POST":
             from app.coach import MAX_COACH_BODY_BYTES
             request.max_content_length = MAX_COACH_BODY_BYTES

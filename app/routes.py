@@ -12,7 +12,7 @@ from app.auth import (
     json_body, normalize_email, rate_limit, require_user, short_string, sign_in, store,
 )
 from app.workouts import CATALOG, confirm_workout, draft_workout
-from app.coach import decode_keyframe, generate_coaching, reports_pain, safety_feedback, validate_feedback, validate_summary
+from app.coach import decode_keyframe, decode_keyframes, generate_coaching, reports_pain, safety_feedback, validate_feedback, validate_summary
 
 main_bp = Blueprint("main", __name__)
 
@@ -129,7 +129,9 @@ def confirm_workout_draft():
 @main_bp.post("/api/coach")
 @require_user
 def coach_set():
-    body = json_body({"set_summary", "user_feedback", "keyframe_image"})
+    body = json_body({"set_summary", "user_feedback"}, {"keyframe_image", "keyframes"})
+    if ("keyframe_image" in body) == ("keyframes" in body):
+        raise APIError("Submit keyframes or a single keyframe image.", 400, "invalid_keyframes")
     feedback = validate_feedback(body["user_feedback"])
     # Pain feedback is handled immediately, even if a failed frame/summary would
     # otherwise block analysis. Never invoke the provider or delay safety for a limit.
@@ -138,7 +140,8 @@ def coach_set():
     else:
         rate_limit("coach", 10, 60)
         summary = validate_summary(body["set_summary"], g.spotter_state.confirmed)
-        image_bytes = decode_keyframe(body["keyframe_image"])
+        image_bytes = (decode_keyframes(body["keyframes"], summary) if "keyframes" in body
+                       else decode_keyframe(body["keyframe_image"]))
         result, source, reason = generate_coaching(summary, feedback, image_bytes, g.spotter_state.preferences)
     response = jsonify(result.model_dump())
     response.headers["X-Spotter-Coach-Source"] = source

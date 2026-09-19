@@ -118,16 +118,18 @@ for (const id of ["squat", "bicep_curl"]) {
         },
       ],
     });
-    draw(175, id);
+    // Exercise starting angles below the former fixed thresholds.
+    const standing = id === "squat" ? 158 : 146;
+    draw(standing, id);
     await workout.enableCamera();
     workout.begin();
-    const angles = [175, 175, 175, 175, 175];
+    const angles = Array(5).fill(standing);
     for (let rep = 1; rep <= 4; rep++) {
       const bottom =
         id === "squat" ? (rep === 3 ? 128 : 90) : rep === 3 ? 95 : 50;
       angles.push(
-        165,
-        150,
+        Math.min(165, standing),
+        Math.min(150, standing),
         138,
         135,
         132,
@@ -139,11 +141,11 @@ for (const id of ["squat", "bicep_curl"]) {
         bottom + 12,
         bottom + 22,
         145,
-        165,
-        175,
-        175,
-        175,
-        175,
+        standing,
+        standing,
+        standing,
+        standing,
+        standing,
       );
     }
     let index = 0;

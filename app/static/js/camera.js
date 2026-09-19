@@ -127,6 +127,22 @@ export class CameraSession {
     this.onInterrupted(message);
   }
 
+  async moveTo(video) {
+    const generation = this.generation;
+    if (!this.stream || !this.stream.getVideoTracks().some((track) => track.readyState === "live"))
+      throw new Error("Camera disconnected. Enable it again to continue.");
+    this.video.pause();
+    this.video.srcObject = null;
+    this.video = video;
+    video.muted = true;
+    video.autoplay = true;
+    video.playsInline = true;
+    video.setAttribute("playsinline", "");
+    video.srcObject = this.stream;
+    await video.play();
+    return generation === this.generation && !document.hidden;
+  }
+
   stop() {
     this.generation += 1;
     this.cleanup.splice(0).forEach((cleanup) => cleanup());

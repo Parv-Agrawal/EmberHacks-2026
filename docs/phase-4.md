@@ -1,6 +1,6 @@
 # Phase 4 — Hands-free commands, session summary, and keyframe replay
 
-Phase 4 extends the existing tracking and coaching flow. It adds opt-in English voice commands, a temporary session journal, an optional effort rating, and a player for each set’s selected worst-rep inflection still. No emergency profile, dispatch service, automated distress detector, or external help call is implemented in this phase.
+Phase 4 extends the existing tracking and coaching flow. It adds opt-in English voice commands, a temporary session journal, an optional effort rating, and a player for completed-rep inflection stills. No emergency profile, dispatch service, automated distress detector, or external help call is implemented in this phase.
 
 ## Behavior
 
@@ -33,11 +33,11 @@ End the workout at any time, or choose **View session summary** after its final 
 - Optional self-reported effort from 1 to 10, its average across rated sets only, user feedback, displayed coaching source, and accepted next-set adjustments.
 - A future focus drawn from actual measured flags and self-reports. No effort or successful form assessment is invented when evidence is missing.
 
-The replay contains one selected worst-rep highlight per set. Its slider, previous/next buttons, and autoplay show inflection stills rather than continuous video. Each highlight identifies exercise, set, rep, inflection timing relative to rep start, peak angle, cadence, and measured flags. Squats say **bottom**; curls say **curl inflection**. A missing or evicted image has an explicit unavailable state alongside its measurements. Autoplay stops at the final highlight and pauses when the page hides.
+The replay contains one inflection highlight per completed rep, within the image budget. A single set with multiple completed reps can therefore play as a slideshow. A single-frame session explicitly says “Only one keyframe saved”; images not captured by older versions cannot be reconstructed. Its slider, previous/next buttons, and autoplay show inflection stills rather than continuous video. Each highlight identifies exercise, set, rep, inflection timing relative to rep start, peak angle, cadence, and measured flags. Squats say **bottom**; curls say **curl inflection**. A missing or evicted image has an explicit unavailable state alongside its measurements. Autoplay stops at the final highlight and pauses when the page hides.
 
 ## Data lifetime and browser behavior
 
-Session history, feedback, effort, coaching, and replay images exist only in page memory. No new server endpoint, localStorage, IndexedDB, audio recorder, or persistent session store was added. The history has a global limit of 40 images and 8 MiB of estimated string storage, evicting oldest images first while retaining their measurements. The current set still retains the existing working candidate/worst JPEGs, separately from the bounded history. Only supplied completed-rep highlights are archived.
+Session history, feedback, effort, coaching, and replay images exist only in page memory. No new server endpoint, localStorage, IndexedDB, audio recorder, or persistent session store was added. The history has a global limit of 40 images and 8 MiB of estimated string storage, evicting oldest images first while retaining their measurements. The current set retains a replay buffer capped at 40 entries and 8 MiB of JPEG string storage, plus the working candidate/worst JPEGs used for coaching, separately from the bounded history. Only supplied completed-rep highlights are archived.
 
 **Clear session & return to plan**, sign-out, new-session initialization, and page exit release session/replay references, remove image sources and summary text, cancel review requests, and stop camera, speech, recognition, and playback timers. Signing out clears local session data immediately even if the logout request fails. Hiding a page stops listening but preserves the session for review. TCard images never enter this path.
 

@@ -696,57 +696,13 @@
               type="button"
               disabled
             >
-              Confirm camera setup
-              <svg class="icon"><use href="#i-check" /></svg>
+              Start workout
+              <svg class="icon"><use href="#i-arrow" /></svg>
             </button>
             <p class="field-hint centered">
               Framing must stay clear before you can continue.
             </p>
           </aside>
-        </div>
-      </section>
-      <section
-        id="view-ready"
-        class="view ready-layout"
-        aria-labelledby="ready-title"
-        hidden
-      >
-        <div class="ready-orbit" aria-hidden="true">
-          <span
-            ><svg class="icon"><use href="#i-check" /></svg
-          ></span>
-        </div>
-        <div class="eyebrow">CHECKED IN. PLANNED OUT. IN FRAME.</div>
-        <h1 id="ready-title" tabindex="-1">
-          You’ve found your rhythm<span class="accent-dot">.</span>
-        </h1>
-        <p class="intro">
-          Your workout setup is complete, <span id="ready-name">Terry</span>.
-        </p>
-        <div class="ready-summary surface">
-          <div>
-            <svg class="icon"><use href="#i-check" /></svg
-            ><span>Profile loaded</span>
-          </div>
-          <div>
-            <svg class="icon"><use href="#i-check" /></svg
-            ><span id="ready-workout">Workout confirmed</span>
-          </div>
-          <div>
-            <svg class="icon"><use href="#i-check" /></svg
-            ><span>Camera framing checked</span>
-          </div>
-        </div>
-        <p class="ready-description">
-          You’re ready for live rep tracking. We’ll check your framing again
-          before counting your first set.
-        </p>
-        <div class="ready-actions">
-          <button id="ready-edit" class="button secondary" type="button">
-            Edit my workout</button
-          ><button id="ready-start" class="button primary" type="button">
-            Start workout <svg class="icon"><use href="#i-arrow" /></svg>
-          </button>
         </div>
       </section>
       <section
@@ -795,7 +751,7 @@
                     />
                   </svg>
                   <p>A little space for your next set.</p>
-                  <span>Keep your full body and both arms in view.</span>
+                  <span>Follow the camera positioning guide for your exercise.</span>
                 </div>
                 <div id="live-badge" class="calibration-badge" role="status">
                   Assessment Unavailable
@@ -975,7 +931,7 @@
                   full form assessment.
                 </p>
                 <p>
-                  One worst-rep still per set is kept for your session replay,
+                  One still per completed rep is kept for your session replay,
                   in page memory only. Leaving the summary or signing out clears
                   it.
                 </p>
@@ -1067,7 +1023,7 @@
               </div>
               <p class="coach-privacy">
                 <svg class="icon"><use href="#i-lock" /></svg> Choosing “Review
-                set with Gemini” sends the displayed workout keyframe, set
+                set with Gemini” sends all captured keyframes from this set, set
                 measurements, your feedback, and selected workout preferences to
                 Google’s Gemini service. TCard images and account identifiers
                 are never included. You can continue with your current plan
@@ -1186,7 +1142,7 @@
               aria-labelledby="replay-title"
             >
               <span class="eyebrow small"
-                >WORST-REP KEYFRAMES · ONE PER SET</span
+                >REP KEYFRAMES · ONE PER COMPLETED REP</span
               >
               <h2 id="replay-title">Replay the moments that matter.</h2>
               <p class="field-hint">

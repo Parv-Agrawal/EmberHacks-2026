@@ -48,6 +48,7 @@ def body():
 def app(monkeypatch):
     monkeypatch.delenv("GEMINI_API_KEY", raising=False)
     monkeypatch.delenv("GOOGLE_API_KEY", raising=False)
+    monkeypatch.setattr(coach, "dotenv_values", lambda *args: {})
     return create_app({"TESTING": True, "SECRET_KEY": "test-coach-secret", "SMTP_HOST": ""})
 
 
@@ -119,7 +120,7 @@ def test_multimodal_call_fuses_image_metrics_feedback_and_only_whitelisted_prefe
     state.preferences["name"] = "private-name"
     response = post(client, "/api/coach", body())
     assert assert_contract(response, "gemini") == FEEDBACK
-    constructor.assert_called_once_with()
+    constructor.assert_called_once_with(api_key="test-placeholder-not-a-real-key")
     request = instance.models.generate_content.call_args.kwargs
     assert request["model"] == "gemini-3.8-flash"
     image_part, prompt = request["contents"]
@@ -155,7 +156,7 @@ def test_real_sdk_serializes_schema_and_inline_image_without_external_network(cl
         return httpx.Response(200, json={"candidates": [{"content": {"role": "model", "parts": [{"text": json.dumps(FEEDBACK)}]}, "finishReason": "STOP"}]})
 
     real_client = coach.genai.Client(http_options={"client_args": {"transport": httpx.MockTransport(handle)}})
-    monkeypatch.setattr(coach.genai, "Client", lambda: real_client)
+    monkeypatch.setattr(coach.genai, "Client", lambda **kwargs: real_client)
     assert_contract(post(client, "/api/coach", body()), "gemini")
     assert len(seen) == 1
     assert "gemini-3.8-flash:generateContent" in str(seen[0].url)
@@ -371,3 +372,71 @@ def test_missing_empty_and_whitespace_output_fields_rejected_by_schema():
     for payload in ({}, {**FEEDBACK, "headline": " "}, {**FEEDBACK, "tips": ["", "Keep control"]}):
         with pytest.raises(ValidationError):
             coach.CoachFeedback.model_validate(payload)
+
+
+def multiframe_body():
+    payload = body()
+    image = payload.pop("keyframe_image")
+    payload["keyframes"] = [{"rep_number": n, "image": image} for n in (1, 2)]
+    return payload
+
+
+def test_all_keyframes_reach_one_provider_call_with_explicit_rep_mapping(client, provider):
+    payload = multiframe_body()
+    payload["keyframes"].reverse()
+    assert_contract(post(client, "/api/coach", payload), "gemini")
+    provider[1].models.generate_content.assert_called_once()
+    contents = provider[1].models.generate_content.call_args.kwargs["contents"]
+    assert len(contents) == 3
+    assert all(part.inline_data.mime_type == "image/jpeg" for part in contents[:-1])
+    context = json.loads(contents[-1])
+    assert [frame["rep_number"] for frame in context["keyframes"]] == [1, 2]
+    assert [frame["image_number"] for frame in context["keyframes"]] == [1, 2]
+    assert context["set_summary"] == summary()
+    assert "Inspect all images" in context["keyframe_context"]["position"]
+
+
+@pytest.mark.parametrize("case", ["empty", "duplicate", "uncompleted", "bool", "extra", "bad_image", "too_many", "both_formats"])
+def test_invalid_keyframe_batches_never_reach_provider(client, provider, case):
+    payload = multiframe_body()
+    frames = payload["keyframes"]
+    if case == "empty": payload["keyframes"] = []
+    elif case == "duplicate": frames[1]["rep_number"] = 1
+    elif case == "uncompleted": frames[1]["rep_number"] = 3
+    elif case == "bool": frames[0]["rep_number"] = True
+    elif case == "extra": frames[0]["private"] = "not allowed"
+    elif case == "bad_image": frames[1]["image"] = "not a jpeg"
+    elif case == "too_many": payload["keyframes"] = frames * 8
+    elif case == "both_formats": payload["keyframe_image"] = frames[0]["image"]
+    assert post(client, "/api/coach", payload).status_code == 400
+    provider[0].assert_not_called()
+
+
+def test_dotenv_key_is_read_at_review_time_and_never_returned(client, provider, monkeypatch):
+    monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+    settings = {}
+    monkeypatch.setattr(coach, "dotenv_values", lambda *args: settings.copy())
+    response = post(client, "/api/coach", multiframe_body())
+    assert_contract(response, "fallback")
+    assert response.headers["X-Spotter-Coach-Reason"] == "missing_api_key"
+    provider[0].assert_not_called()
+    settings["GEMINI_API_KEY"] = "test-local-file-key"
+    response = post(client, "/api/coach", multiframe_body())
+    assert_contract(response, "gemini")
+    provider[0].assert_called_once_with(api_key="test-local-file-key")
+    assert "test-local-file-key" not in response.get_data(as_text=True)
+
+
+def test_real_sdk_serializes_every_keyframe_in_one_request(client, monkeypatch):
+    monkeypatch.setenv("GEMINI_API_KEY", "test-placeholder-not-a-real-key")
+    seen = []
+    def handle(request):
+        seen.append(json.loads(request.content))
+        return httpx.Response(200, json={"candidates": [{"content": {"role": "model", "parts": [{"text": json.dumps(FEEDBACK)}]}, "finishReason": "STOP"}]})
+    real_client = coach.genai.Client(http_options={"client_args": {"transport": httpx.MockTransport(handle)}})
+    monkeypatch.setattr(coach.genai, "Client", lambda **kwargs: real_client)
+    assert_contract(post(client, "/api/coach", multiframe_body()), "gemini")
+    assert len(seen) == 1
+    parts = seen[0]["contents"][0]["parts"]
+    assert len([part for part in parts if "inlineData" in part]) == 2
+    assert [frame["rep_number"] for frame in json.loads(parts[-1]["text"])["keyframes"]] == [1, 2]

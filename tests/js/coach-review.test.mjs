@@ -238,7 +238,7 @@ test("pain feedback stops immediately without calling the coach endpoint", async
   f.click("feedback-pain");
   assert.equal(f.pains(), 1);
   assert.equal(f.review.stopped, true);
-  assert.equal(f.get("coach-feedback").disabled, true);
+  assert.equal(f.get("coach-feedback").disabled, false);
   assert.equal(f.get("coach-submit").disabled, true);
   assert.equal(f.get("adapt-panel").hidden, true);
   assert.match(f.get("coach-status").textContent, /Exercise stopped/);
@@ -453,4 +453,42 @@ test("structured feedback validation enforces exactly two tips and concise strin
     { ...feedback(), extra: "Unexpected" },
   ])
     assert.equal(validCoachFeedback(invalid), false);
+});
+
+test("review sends all captured keyframes even if the worst-rep image is missing", async (t) => {
+  const set = context();
+  set.image = null;
+  set.keyframes = [
+    { rep_number: 1, image: "data:image/jpeg;base64,Zmlyc3Q=" },
+    { rep_number: 2, image: "data:image/jpeg;base64,c2Vjb25k" },
+  ];
+  const expected = structuredClone(set.keyframes);
+  const f = fixture(t, { set });
+  set.keyframes[0].image = "external change";
+  f.input("Felt easy");
+  assert.equal(f.get("coach-submit").textContent, "Review set with Gemini");
+  assert.equal(f.calls.length, 0);
+  await f.review.submit();
+  assert.equal(f.calls.length, 1);
+  assert.deepEqual(f.calls[0].body.keyframes, expected);
+  assert.equal(Object.hasOwn(f.calls[0].body, "keyframe_image"), false);
+});
+
+test("an accidental pain choice can be corrected for review without proposing another set", async (t) => {
+  const f = fixture(t);
+  f.click("feedback-pain");
+  assert.equal(f.get("feedback-fatigue").disabled, false);
+  assert.match(f.get("coach-status").textContent, /selected by mistake/);
+  f.click("feedback-fatigue");
+  assert.equal(f.get("coach-submit").disabled, false);
+  assert.equal(f.get("adapt-panel").hidden, true);
+  await f.review.submit();
+  assert.equal(f.calls.length, 1);
+  assert.equal(f.calls[0].body.user_feedback, "I felt fatigued");
+  f.review.decide(true);
+  assert.ok(f.decisions.every((decision) => decision === null));
+  f.click("feedback-pain");
+  assert.equal(f.get("coach-submit").disabled, true);
+  await f.review.submit();
+  assert.equal(f.calls.length, 1);
 });

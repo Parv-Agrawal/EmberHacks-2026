@@ -1,9 +1,13 @@
-/** At most two JPEGs in page memory: current inflection and worst completed rep. */
+const MAX_REPLAY_FRAMES = 40;
+const MAX_REPLAY_BYTES = 8 * 1024 * 1024;
+
+/** Bounded completed-rep replay, plus the current inflection and coaching still. */
 export class WorstRepBuffer {
   constructor({ createCanvas = () => document.createElement("canvas") } = {}) {
     this.canvas = createCanvas();
     this.candidate = null;
     this.worst = null;
+    this.completed = [];
   }
 
   observe(snapshot, video) {
@@ -43,6 +47,17 @@ export class WorstRepBuffer {
     }
     const rep = snapshot.completedRep;
     if (rep) {
+      this.completed.push({ rep: structuredClone(rep), image: this.candidate });
+      if (this.completed.length > MAX_REPLAY_FRAMES) this.completed.shift();
+      let bytes = this.completed.reduce(
+        (total, frame) => total + (frame.image?.length || 0) * 2, 0,
+      );
+      for (const frame of this.completed) {
+        if (bytes <= MAX_REPLAY_BYTES) break;
+        bytes -= (frame.image?.length || 0) * 2;
+        frame.image = null;
+        frame.imageStatus = "memory-limit";
+      }
       if (!this.worst || rep.score > this.worst.rep.score) {
         this.worst = { rep: structuredClone(rep), image: this.candidate };
       }
@@ -57,6 +72,7 @@ export class WorstRepBuffer {
   clear() {
     this.candidate = null;
     this.worst = null;
+    this.completed = [];
     this.canvas.width = 0;
     this.canvas.height = 0;
   }

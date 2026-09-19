@@ -1,7 +1,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { LiveWorkout } from "../../app/static/js/live-workout.js";
-import { MAX_FRAME_AGE_MS } from "../../app/static/js/calibration.js";
+import {
+  CalibrationGate,
+  MAX_FRAME_AGE_MS,
+} from "../../app/static/js/calibration.js";
 
 const plan = () => ({
   exercises: [
@@ -178,7 +181,7 @@ function fixture(t, workout = plan(), { requestCoach, onHelp } = {}) {
     get("workout-video").srcObject = {};
     live.onCamera({ status: "ready", ready: true, message: "Ready." });
   };
-  const sample = (angle, options = {}) => {
+  const sample = (angle, { gate, ...options } = {}) => {
     now += 100;
     const points = Array.from({ length: 33 }, () => ({ x: 0, y: 0, z: 0 }));
     const joints =
@@ -205,13 +208,16 @@ function fixture(t, workout = plan(), { requestCoach, onHelp } = {}) {
     }));
     camera.lastFrameAt = now;
     get("workout-video").frameMarker = `pose:${angle}:at:${now}`;
-    live.onFrame({
+    const frame = {
       landmarks,
       worldLandmarks: points,
       now,
       capturedAt: now,
       ...options,
-    });
+    };
+    if (gate)
+      live.onCamera(gate.update(frame.landmarks, frame.now, frame.capturedAt));
+    live.onFrame(frame);
     return live.lastSnapshot;
   };
   const feed = (angles) => angles.map((angle) => sample(angle));
@@ -284,7 +290,7 @@ test("opening prepares a cloned plan without starting a device; begin requires a
   f.live.begin();
   assert.equal(f.live.stage, "preparing");
   await f.live.enableCamera();
-  assert.deepEqual(f.camera.starts, [{ exerciseId: "squat" }]);
+  assert.deepEqual(f.camera.starts, [{ exerciseId: "squat", fullBody: false }]);
   f.ready();
   f.at(f.now() + MAX_FRAME_AGE_MS + 1);
   f.live.begin();
@@ -338,6 +344,49 @@ test("pause releases devices and unfinished images while preserving completed re
   assert.equal(f.live.tracker.summary().completed_reps, 2);
 });
 
+for (const exerciseId of ["squat", "bicep_curl"]) {
+  test(`${exerciseId}: camera gating and the displayed counter ignore joints unrelated to the movement`, (t) => {
+    const f = fixture(t, {
+      exercises: [{
+        id: exerciseId,
+        name: exerciseId,
+        sets: 1,
+        reps: 2,
+        rest_seconds: 30,
+      }],
+    });
+    const gate = new CalibrationGate({ exerciseId });
+    for (let index = 0; index < 13; index++) f.sample(175, { gate });
+    assert.equal(f.get("live-begin").disabled, false);
+    f.live.begin();
+    for (let index = 0; index < 5; index++) f.sample(175, { gate });
+
+    const landmarks = Array.from({ length: 33 }, () => ({
+      x: 0.5,
+      y: 0.5,
+      visibility: 0.95,
+      presence: 0.95,
+    }));
+    // Hands commonly overlap the torso during a squat. Ankles do not provide
+    // evidence for an elbow curl. Neither should reset an otherwise visible rep.
+    const obscured = exerciseId === "squat" ? [13, 14, 15, 16] : [25, 26, 27, 28];
+    for (const index of obscured) landmarks[index].visibility = 0.1;
+    const bottom = exerciseId === "squat" ? 90 : 50;
+    for (let rep = 0; rep < 2; rep++) {
+      for (const angle of [
+        165, 150, 138, 130, 120, 110, bottom, bottom, bottom, bottom,
+        bottom + 4, bottom + 12, bottom + 22, 125, 145, 165, 175, 175, 175,
+      ]) {
+        f.sample(angle, { landmarks, gate });
+      }
+    }
+    assert.equal(f.get("live-count").textContent, 2);
+    assert.equal(f.live.stage, "finished");
+    assert.equal(f.live.tracker.summary().completed_reps, 2);
+    assert.ok(f.live.frames.worst.image);
+  });
+}
+
 test("stale or invisible camera status abandons partial motion and gates incoming measurements", (t) => {
   const f = fixture(t);
   f.start();
@@ -366,6 +415,40 @@ test("stale or invisible camera status abandons partial motion and gates incomin
     f.feed([90, 110, 150, 175, 175]);
     assert.equal(f.live.tracker.summary().completed_reps, 1);
   }
+});
+
+test("the live squat counter completes a set when standing is measured at 158 degrees", (t) => {
+  const f = fixture(t);
+  const gate = new CalibrationGate({ exerciseId: "squat" });
+  for (let index = 0; index < 13; index++) f.sample(158, { gate });
+  f.live.begin();
+  for (let index = 0; index < 4; index++) f.sample(158, { gate });
+  assert.match(f.get("live-status").textContent, /calibrated/i);
+  for (let elapsed = 0; elapsed <= 6100; elapsed += 100) {
+    const angle = 90 + 68 * (1 + Math.cos(elapsed / 2000 * 2 * Math.PI)) / 2;
+    f.sample(angle, { gate });
+  }
+  assert.equal(f.get("live-count").textContent, 3);
+  assert.equal(f.live.stage, "finished");
+  assert.equal(f.live.history.sets[0].summary.completed_reps, 3);
+});
+
+test("the live curl counter completes a set with a lowered-arm angle of 146 degrees", (t) => {
+  const f = fixture(t, { exercises: [
+    { id: "bicep_curl", name: "Bicep curls", sets: 1, reps: 3, rest_seconds: 30 },
+  ] });
+  const gate = new CalibrationGate({ exerciseId: "bicep_curl" });
+  for (let index = 0; index < 13; index++) f.sample(146, { gate });
+  f.live.begin();
+  for (let index = 0; index < 4; index++) f.sample(146, { gate });
+  assert.match(f.get("live-status").textContent, /calibrated/i);
+  for (let elapsed = 0; elapsed <= 6100; elapsed += 100) {
+    const angle = 50 + 96 * (1 + Math.cos(elapsed / 2000 * 2 * Math.PI)) / 2;
+    f.sample(angle, { gate });
+  }
+  assert.equal(f.get("live-count").textContent, 3);
+  assert.equal(f.live.stage, "finished");
+  assert.equal(f.live.history.sets[0].summary.completed_reps, 3);
 });
 
 test("camera failure or tab hiding pauses automatically and late frames cannot update the HUD", (t) => {
@@ -446,9 +529,33 @@ for (const exerciseId of ["squat", "bicep_curl"]) {
     assert.equal(f.exits(), 0);
     assert.equal(f.get("session-summary").hidden, false);
     assert.equal(f.get("summary-reps").textContent, 2);
-    assert.equal(f.live.sessionSummary.replay.entries.length, 1);
+    assert.equal(f.live.sessionSummary.replay.entries.length, 2);
   });
 }
+
+test("a single set replays every completed rep and stops at its last keyframe", (t) => {
+  t.mock.timers.enable({ apis: ["setInterval"] });
+  const f = fixture(t);
+  f.start();
+  f.rep();
+  f.rep();
+  f.rep();
+  f.live.endSession();
+  const replay = f.live.sessionSummary.replay;
+  assert.equal(replay.entries.length, 3);
+  assert.equal(f.get("replay-play").disabled, false);
+  const images = replay.entries.map((entry) => entry.image);
+  assert.equal(new Set(images).size, 3);
+  f.click("replay-play");
+  assert.equal(replay.playing, true);
+  t.mock.timers.tick(1600);
+  assert.equal(f.get("replay-image").src, images[1]);
+  assert.match(f.get("replay-caption").textContent, /Rep 2/);
+  t.mock.timers.tick(1600);
+  assert.equal(f.get("replay-image").src, images[2]);
+  assert.equal(replay.playing, false);
+  assert.equal(f.get("replay-next").disabled, true);
+});
 
 test("ending an incomplete first rep shows an empty result without retaining its image", (t) => {
   const f = fixture(t);
@@ -627,7 +734,9 @@ test("committed pain during an in-flight review aborts HTTP and speech immediate
   assert.equal(transport.requests.length, 1);
   const { body, signal } = transport.requests[0];
   assert.equal(body.set_summary.completed_reps, 8);
-  assert.equal(body.keyframe_image, f.live.frames.worst.image);
+  assert.deepEqual(body.keyframes, f.live.frames.completed.map((frame) => ({
+    rep_number: frame.rep.rep_number, image: frame.image,
+  })));
   assert.equal(signal.aborted, false);
   assert.equal(f.live.review.pending, true);
   const voiceStops = f.voice.stops;
@@ -1145,8 +1254,8 @@ test("summary combines completed sets, effort and replay highlights, then dispos
   assert.equal(f.get("summary-effort").textContent, "7 / 10");
   assert.equal(f.get("summary-exercises").children.length, 2);
   assert.equal(f.get("summary-set-list").children.length, 3);
-  assert.equal(f.live.history.summary().retainedFrames, 3);
-  assert.equal(f.live.sessionSummary.replay.entries.length, 3);
+  assert.equal(f.live.history.summary().retainedFrames, 8);
+  assert.equal(f.live.sessionSummary.replay.entries.length, 8);
   assert.deepEqual(
     f.live.history.sets.map((set) => set.effort),
     [6, 8, null],
@@ -1208,4 +1317,46 @@ test("repeat uses the most recent spoken cue without reviewing or changing the s
   assert.equal(f.get("live-cue").textContent, "Keep the movement controlled.");
   assert.equal(f.live.stage, "active");
   assert.equal(transport.requests.length, 0);
+});
+
+test("correcting a pain selection enables recorded-set review but keeps the exercise blocked", async (t) => {
+  const transport = deferredReview();
+  const f = fixture(t, adaptivePlan(), transport);
+  completeSet(f);
+  f.click("feedback-pain");
+  assert.equal(f.live.painStopped, true);
+  f.click("feedback-fatigue");
+  assert.equal(f.get("coach-submit").disabled, false);
+  const submission = f.live.review.submit();
+  assert.equal(transport.requests.length, 1);
+  transport.resolve(coachResponse());
+  await submission;
+  assert.equal(f.get("coach-result").hidden, false);
+  assert.equal(f.live.painStopped, true);
+  assert.equal(f.live.blockedExercises.has("squat"), true);
+  assert.equal(f.live.pendingAdaptation, null);
+  assert.equal(f.get("adapt-panel").hidden, true);
+  assert.equal(f.live.history.sets[0].stoppedForPain, true);
+  f.at(f.live.restUntil);
+  f.live.next();
+  assert.notEqual(f.live.exercise.id, "squat");
+});
+
+test("opening a workout from calibration adopts its camera without a second enable action", (t) => {
+  const f = fixture(t);
+  const source = { name: "setup-camera" };
+  const handoffs = [];
+  f.camera.takeOver = (camera, options) => {
+    handoffs.push({ camera, options });
+    f.live.onCamera({ status: "loading", ready: false, message: "Camera connected." });
+  };
+  f.live.open(plan(), { camera: source });
+  assert.deepEqual(handoffs, [{ camera: source, options: { exerciseId: "squat" } }]);
+  assert.equal(f.get("live-enable").hidden, true);
+  assert.equal(f.get("live-begin").disabled, true);
+  assert.equal(f.camera.starts.length, 0);
+  f.ready();
+  assert.equal(f.get("live-begin").disabled, false);
+  f.click("live-begin");
+  assert.equal(f.live.stage, "active");
 });

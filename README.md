@@ -14,7 +14,7 @@ source .venv/bin/activate
 python -m pip install -r requirements.txt
 npm ci
 npm run setup:vision
-# For Gemini review, set GEMINI_API_KEY in this server environment.
+# For Gemini review, copy .env.example to .env and enter GEMINI_API_KEY.
 python -m flask --app run run --port 5055
 ```
 
@@ -27,11 +27,11 @@ On Windows, activate the environment with `.venv\Scripts\activate`. Open [Spotte
 1. Enable the TCard camera and scan a Code 128 or Code 39 barcode containing `2176123456789100`. A green outline and confirmation tone precede sign-in. For a camera-free walkthrough, expand the demo-access control and enter `leeterry`.
 2. Choose a goal, experience level, available time, equipment, and movements to avoid. Draft a routine using bodyweight squats and/or dumbbell bicep curls.
 3. Edit sets, reps, or rest; remove a movement if needed. Confirm the routine.
-4. Start camera calibration. Keep shoulders, elbows, wrists, hips, knees, and ankles visible. After 1.2 seconds of confident, uninterrupted full-body visibility, confirm camera setup. Missing or stale frames keep confirmation disabled.
-5. Choose **Start workout**, enable the live-set camera, and select **Start set** after a fresh framing check. Complete squats or bilateral curls while following the rep/angle/timer HUD and brief spoken cues. Pause, resume, mute, or end the set with visible controls.
-6. Review the worst completed rep’s image and measurements. Choose how the set felt and **Review set with Gemini** to send the displayed workout frame for analysis. Without a configured API key, local guidance is clearly labelled.
+4. Start camera calibration. Keep shoulders, elbows, wrists, hips, knees, and ankles visible. After 1.2 seconds of confident, uninterrupted full-body visibility, select **Start workout** to proceed directly to the live workout. Missing or stale frames keep this button disabled.
+5. The live workout automatically reuses your setup camera and loaded pose model. Select **Start set** after a brief framing check. Complete squats or bilateral curls while following the rep/angle/timer HUD and brief spoken cues. Pause, resume, mute, or end the set with visible controls.
+6. Review the worst completed rep’s image and measurements. Choose how the set felt and **Review set with Gemini** to send all captured completed-rep keyframes from that set for analysis in one request. Without a configured API key, local guidance is clearly labelled.
 7. Accept the proposed next-set reps/rest or keep your current settings. Report pain with the visible stop button or feedback control to end that exercise immediately. Enable voice commands if desired; speak feedback without automatically requesting a review. Rate each set’s effort from 1–10.
-8. End the workout to view measured volume, form trends, self-reported effort, and one worst-rep inflection still per set. Clear the summary to release all session data. The microphone is opt-in, may use the browser vendor’s speech service, and turns off when the page is hidden or the session ends.
+8. End the workout to view measured volume, form trends, self-reported effort, and a keyframe slideshow with one inflection still per completed rep (within the session memory limit). Playback needs at least two captured frames; older sessions with only one saved still cannot be expanded. Clear the summary to release all session data. The microphone is opt-in, may use the browser vendor’s speech service, and turns off when the page is hidden or the session ends.
 9. Open **Emergency profile** from the persistent bottom rail. Enter the details you choose to include, confirm your location and any medication names/doses, and separately approve medical details for the local demo briefing.
 10. Trigger **SOS · Demo** or say **Call for help** while voice commands are enabled. Movement and pending coaching stop immediately; the local handoff displays its fixed test recipient, briefing, check-in controls, and simulated progress. You can cancel or close it at any time. Missing profiles never block SOS.
 
@@ -41,9 +41,9 @@ The seeded account is **Terry Lee**, UTORid `leeterry`, student ID `1234567890`,
 
 The email fallback issues a single-use six-digit code valid for **five minutes**, with at most five verification attempts. By default, the server terminal displays the code with a clear demo prefix; this console flow does **not** verify email ownership. To deliver actual email, configure `SPOTTER_DEMO_EMAIL` with a mailbox you control and supply `SMTP_HOST`, `SMTP_FROM`, and any required SMTP credentials. The full [Phase 1 specification](docs/phase-1.md#email-and-session-configuration) covers configuration and verification.
 
-Card pixels and barcode decoding stay in browser memory; card images are never uploaded or sent to Gemini. Live movement processing stays on-device until the user explicitly requests a review. That action sends one workout JPEG, set measurements, user feedback, and selected preferences to Gemini through the local server. The application does not write images to disk or retain review payloads; Google processes submitted data according to the configured service. Account identifiers and raw restriction text are excluded from the model prompt.
+Card pixels and barcode decoding stay in browser memory; card images are never uploaded or sent to Gemini. Live movement processing stays on-device until the user explicitly requests a review. That action sends all available completed-rep JPEG keyframes from the set (up to 15), their rep numbers, set measurements, user feedback, and selected preferences to Gemini through the local server. The application does not write images to disk or retain review payloads; Google processes submitted data according to the configured service. Account identifiers and raw restriction text are excluded from the model prompt.
 
-Set `GEMINI_API_KEY` (or `GOOGLE_API_KEY`) only in the server environment and restart Flask after changing it. No key is required to run the rest of the app or exercise the fallback path. See [Gemini setup](docs/phase-3.md#run-with-gemini).
+Enter `GEMINI_API_KEY=your-key` in the project-root `.env` file (beside `run.py`). This file is ignored by Git. The server reads it on each review, so saving a new key takes effect without restarting. A key already set in the server environment takes precedence; restart Flask to change an environment-provided key. Use `.env.example` as the template on a fresh checkout. No key is required to run the rest of the app or exercise the fallback path. See [Gemini setup](docs/phase-3.md#run-with-gemini).
 
 ## Verify
 
@@ -52,7 +52,7 @@ python -m pytest -q
 npm test
 ```
 
-**Verified:** 243 JavaScript tests passed; 168 Python tests passed, with one optional legacy test skipped.
+**Verified:** 269 JavaScript tests passed; 179 Python tests passed, with one optional legacy test skipped.
 
 Verification covers authenticated requests, Gemini serialization/fallback, pain aborts, movement tracking, command parsing and microphone lifecycle, spoken-cue echo protection, camera-gated resume, bounded rest, summary calculations, replay memory limits, profile consent, allowlisted local SOS handoff, immediate cancellation, and cleanup. See the [Phase 5 verification procedure](docs/phase-5.md#verification-procedure).
 

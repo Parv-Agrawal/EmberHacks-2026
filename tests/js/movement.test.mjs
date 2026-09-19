@@ -404,3 +404,113 @@ test("range faults and actionable cues appear after the turn, never prematurely 
   const completed = states.find((state) => state.completedRep);
   assert.match(completed.formMessage, /complete.*next rep.*lower/i);
 });
+
+for (const exerciseId of ["squat", "bicep_curl"]) {
+  test(`${exerciseId}: continuous two-second repetitions count without a pause at extension`, () => {
+    const f = fixture(exerciseId, 5);
+    const standing = exerciseId === "squat" ? 161 : 156;
+    const flexed = exerciseId === "squat" ? 90 : 50;
+    f.feed(Array(5).fill(standing));
+    // Smooth motion only crosses the initial straight-pose threshold for one
+    // sample per cycle. The return still needs sustained, near-full extension.
+    for (let elapsed = 0; elapsed <= 8100; elapsed += 100) {
+      const angle =
+        flexed +
+        ((standing - flexed) *
+          (1 + Math.cos((elapsed / 2000) * 2 * Math.PI))) /
+          2;
+      f.sample(angle);
+    }
+    const reps = f.tracker.summary().reps;
+    assert.equal(reps.length, 4);
+    assert.deepEqual(reps.map((rep) => rep.rep_number), [1, 2, 3, 4]);
+    assert.ok(reps.every((rep) => rep.peak_angle_deg === flexed));
+    assert.ok(reps.every((rep) => rep.faults.length === 0));
+  });
+
+  test(`${exerciseId}: return-pose jitter and incomplete bilateral extension do not finish a rep`, () => {
+    const f = fixture(exerciseId);
+    const nearExtension = exerciseId === "squat" ? 155 : 150;
+    f.arm();
+    f.feed([138, 130, 120, 100, 90, 70, 50, 50, 65, 90, 120, 140]);
+    for (let index = 0; index < 5; index++)
+      f.feed([nearExtension + 1, nearExtension - 2]);
+    assert.equal(f.tracker.summary().completed_reps, 0);
+    for (let index = 0; index < 5; index++)
+      f.sample(175, { rightAngle: nearExtension - 2 });
+    assert.equal(f.tracker.summary().completed_reps, 0);
+    f.feed([175, 175, 175, 175]);
+    assert.equal(f.tracker.summary().completed_reps, 1);
+  });
+
+  test(`${exerciseId}: shallow partial cycles remain excluded with a sustained return`, () => {
+    const f = fixture(exerciseId);
+    const flexed = exerciseId === "squat" ? 143 : 118;
+    f.arm();
+    f.feed(Array(5).fill(flexed));
+    f.feed([150, 165, 175, 175, 175, 175, 175, 175]);
+    assert.equal(f.tracker.summary().completed_reps, 0);
+    assert.ok(
+      f.states.some((state) => /Partial movement skipped/.test(state.formMessage)),
+    );
+  });
+}
+
+test("squats calibrate each standing knee instead of waiting forever for a fixed angle", () => {
+  const f = fixture("squat", 3);
+  for (let index = 0; index < 6; index++) f.sample(152, { rightAngle: 166 });
+  for (let elapsed = 0; elapsed <= 6100; elapsed += 100) {
+    const bend = 62 * (1 - Math.cos((elapsed / 2000) * 2 * Math.PI)) / 2;
+    f.sample(152 - bend, { rightAngle: 166 - bend });
+  }
+  assert.equal(f.tracker.summary().completed_reps, 3);
+});
+
+test("standing calibration rejects a moving or deeply bent starting pose", () => {
+  const f = fixture();
+  f.feed(Array(8).fill(110));
+  assert.equal(f.tracker.armed, false);
+  f.feed([145, 154, 163, 172]);
+  assert.equal(f.tracker.armed, false);
+  f.arm();
+  assert.equal(f.tracker.armed, true);
+  assert.equal(f.tracker.summary().completed_reps, 0);
+});
+
+test("calibrated squats still need meaningful bending and both knees to return", () => {
+  const f = fixture();
+  f.feed(Array(6).fill(152));
+  f.feed([135, 133, 133, 133, 140, 150, 152, 152, 152, 152]);
+  assert.equal(f.tracker.summary().completed_reps, 0);
+  f.feed(Array(6).fill(152));
+  f.feed([135, 130, 120, 95, 90, 90, 105, 115, 125, 135]);
+  for (let index = 0; index < 6; index++) f.sample(152, { rightAngle: 130 });
+  assert.equal(f.tracker.summary().completed_reps, 0);
+  f.feed([152, 152, 152, 152]);
+  assert.equal(f.tracker.summary().completed_reps, 1);
+});
+
+test("curls calibrate lowered elbows below 155 degrees and count continuous repetitions", () => {
+  const f = fixture("bicep_curl", 3);
+  for (let index = 0; index < 6; index++) f.sample(146, { rightAngle: 154 });
+  for (let elapsed = 0; elapsed <= 6100; elapsed += 100) {
+    const bend = 96 * (1 - Math.cos(elapsed / 2000 * 2 * Math.PI)) / 2;
+    f.sample(146 - bend, { rightAngle: 154 - bend });
+  }
+  assert.equal(f.tracker.summary().completed_reps, 3);
+});
+
+test("curl calibration rejects a held flexed pose and does not count incomplete returns", () => {
+  const f = fixture("bicep_curl");
+  f.feed(Array(6).fill(85));
+  assert.equal(f.tracker.armed, false);
+  f.feed([135, 144, 153, 162]);
+  assert.equal(f.tracker.armed, false);
+  f.feed(Array(6).fill(146));
+  assert.equal(f.tracker.armed, true);
+  f.feed([130, 125, 110, 90, 65, 50, 50, 65, 90, 110, 130]);
+  for (let index = 0; index < 6; index++) f.sample(146, { rightAngle: 125 });
+  assert.equal(f.tracker.summary().completed_reps, 0);
+  f.feed([146, 146, 146, 146]);
+  assert.equal(f.tracker.summary().completed_reps, 1);
+});

@@ -269,3 +269,72 @@ test("ordinary framing calibration does not allocate or copy workout keyframes",
   assert.equal(f.inferred[0].source, f.video);
   assert.equal(f.created.length, 0);
 });
+
+function transferTarget(f, play = async function () { this.paused = false; }) {
+  const updates = [];
+  let stopped = 0;
+  const track = { readyState: "live", stop() { stopped += 1; this.readyState = "ended"; } };
+  const stream = { getTracks: () => [track], getVideoTracks: () => [track] };
+  f.calibration.camera.stream = stream;
+  f.video.srcObject = stream;
+  const video = { ...f.video, srcObject: null, setAttribute() {}, play };
+  const target = new CameraCalibration(video, canvas(), {
+    snapshotFrames: true, onUpdate: (state) => updates.push(state),
+  });
+  target.draw = () => {};
+  return { target, video, stream, updates, stops: () => stopped };
+}
+
+test("setup hands the same live stream and pose model to the workout without reopening the camera", async (t) => {
+  const f = fixture(t, { snapshotFrames: false });
+  f.tick();
+  const previousGeneration = f.calibration.generation;
+  const h = transferTarget(f);
+  await h.target.takeOver(f.calibration, { exerciseId: "squat" });
+  assert.equal(h.video.srcObject, h.stream);
+  assert.equal(f.video.srcObject, null);
+  assert.equal(h.target.landmarker, f.model);
+  assert.equal(f.calibration.landmarker, null);
+  assert.equal(f.model.closed, 0);
+  assert.equal(h.stops(), 0);
+  assert.equal(h.target.gate.exerciseId, "squat");
+  assert.equal(h.updates.at(-1).status, "unavailable");
+  const scheduled = f.scheduled.length;
+  f.calibration.tick(1100, previousGeneration);
+  assert.equal(f.scheduled.length, scheduled);
+  f.calibration.stop();
+  assert.equal(h.video.srcObject, h.stream, "old view cleanup must not detach the workout");
+  assert.equal(h.stops(), 0);
+  assert.equal(f.calibration.camera.video, f.video, "setup can be used again on its own video");
+  h.target.tick(1000, h.target.generation);
+  assert.equal(f.inferred.length, 2);
+  h.target.camera.onInterrupted("Camera disconnected.");
+  assert.equal(h.updates.at(-1).status, "stopped");
+  assert.equal(h.video.srcObject, null);
+  assert.equal(h.stops(), 1);
+  assert.equal(f.model.closed, 1);
+});
+
+test("a failed camera handoff releases the stream and model and exposes a retry", async (t) => {
+  const f = fixture(t);
+  const h = transferTarget(f, async () => { throw new Error("Playback failed"); });
+  await h.target.takeOver(f.calibration, { exerciseId: "squat" });
+  assert.equal(h.updates.at(-1).status, "error");
+  assert.equal(h.stops(), 1);
+  assert.equal(f.model.closed, 1);
+  assert.equal(h.video.srcObject, null);
+});
+
+test("leaving during camera handoff cannot restart capture when playback resolves", async (t) => {
+  const f = fixture(t);
+  let resolvePlay;
+  const h = transferTarget(f, () => new Promise((resolve) => { resolvePlay = resolve; }));
+  const pending = h.target.takeOver(f.calibration, { exerciseId: "squat" });
+  h.target.stop();
+  resolvePlay();
+  await pending;
+  assert.equal(h.stops(), 1);
+  assert.equal(f.model.closed, 1);
+  assert.equal(h.video.srcObject, null);
+  assert.equal(h.target.frameRequest, null);
+});

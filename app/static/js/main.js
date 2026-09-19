@@ -104,11 +104,11 @@ async function action(button, errorId, task, scope) {
   }
 }
 
-function showView(view, { focus = true } = {}) {
+function showView(view, { focus = true, keepCalibration = false } = {}) {
   state.view = view;
   liveWorkout.dispose();
   scanner.stop();
-  calibration.stop();
+  if (!keepCalibration) calibration.stop();
   state.calibration = null;
   updateScanner({
     status: "stopped",
@@ -117,7 +117,7 @@ function showView(view, { focus = true } = {}) {
   document.querySelectorAll(".view").forEach((section) => {
     section.hidden = section.id !== `view-${view}`;
   });
-  const current = ["ready", "workout"].includes(view) ? 4 : steps.indexOf(view);
+  const current = view === "workout" ? steps.length : steps.indexOf(view);
   document.querySelectorAll("[data-step]").forEach((item, index) => {
     item.classList.toggle("complete", index < current);
     if (index === current) item.setAttribute("aria-current", "step");
@@ -144,7 +144,6 @@ function setUser(user) {
   if (user) {
     const firstName = user.name.split(" ")[0];
     $("greeting-name").textContent = firstName.toUpperCase();
-    $("ready-name").textContent = firstName;
     $("sign-out").title = `Sign out ${user.name}`;
   }
 }
@@ -210,8 +209,6 @@ function resetSessionView() {
     $(id).textContent = "—";
   $("confirm-workout").disabled = true;
   $("greeting-name").textContent = "";
-  $("ready-name").textContent = "";
-  $("ready-workout").textContent = "Workout confirmed";
   $("sign-out").title = "Sign out";
   document.querySelectorAll(".notice").forEach((item) => {
     item.hidden = true;
@@ -573,10 +570,6 @@ $("back-to-plan").addEventListener("click", () => {
   renderWorkout();
   showView("plan");
 });
-$("ready-edit").addEventListener("click", () => {
-  renderWorkout();
-  showView("plan");
-});
 $("confirm-workout").addEventListener("click", (event) => {
   for (const input of $("exercise-list").querySelectorAll("input"))
     if (!input.reportValidity()) return;
@@ -658,9 +651,8 @@ $("finish-calibration").addEventListener("click", () => {
     );
     return;
   }
-  $("ready-workout").textContent =
-    `${state.workout.exercises.length} exercise${state.workout.exercises.length === 1 ? "" : "s"} planned`;
-  showView("ready");
+  showView("workout", { keepCalibration: true });
+  liveWorkout.open(state.workout, { camera: calibration });
 });
 const liveWorkout = new LiveWorkout({
   onHelp: (context) => emergency.trigger(context),
@@ -695,10 +687,6 @@ const emergency = new EmergencyAssistant({
     liveWorkout.endSession();
     return { reason };
   },
-});
-$("ready-start").addEventListener("click", () => {
-  showView("workout");
-  liveWorkout.open(state.workout);
 });
 window.addEventListener("pagehide", () => {
   emergency.clear();

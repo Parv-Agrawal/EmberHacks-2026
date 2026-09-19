@@ -92,14 +92,20 @@ export class CoachReview {
     $("adapt-keep").addEventListener("click", () => this.decide(false));
   }
 
+  get hasImages() {
+    return Array.isArray(this.context?.keyframes)
+      ? this.context.keyframes.length > 0
+      : Boolean(this.context?.image);
+  }
+
   open(context) {
     this.reset();
     this.context = structuredClone(context);
     $("coach-panel").hidden = false;
     text(
       "coach-status",
-      context.image
-        ? "Tell us how it felt, then choose whether to send this set for review."
+      this.hasImages
+        ? `Review will send ${this.context.keyframes?.length || 1} captured rep keyframe(s). Tell us how the set felt, then choose Review set with Gemini.`
         : "No completed-rep image is available. Your feedback can still guide a local next-set proposal.",
     );
     this.render();
@@ -139,7 +145,7 @@ export class CoachReview {
   }
 
   feedbackChanged({ committed = false } = {}) {
-    if (!this.context || this.stopped) return;
+    if (!this.context) return;
     const feedback = $("coach-feedback").value.trim();
     this.lastFeedback = null;
     this.cancel();
@@ -148,6 +154,7 @@ export class CoachReview {
     this.onDecision(null);
     if (reportsPain(feedback)) {
       if (committed) {
+        this.markPain();
         this.onPain();
         return;
       }
@@ -160,6 +167,9 @@ export class CoachReview {
       this.render();
       return;
     }
+    // Correcting feedback permits review of recorded reps, never a restart of
+    // the stopped exercise or a proposal to perform another set of it.
+    if (feedback) this.stopped = false;
     this.proposal = feedback
       ? proposeNextSet({
           summary: this.context.summary,
@@ -182,6 +192,7 @@ export class CoachReview {
     if (!this.context) return;
     this.cancel();
     this.stopped = true;
+    this.context.hasNextSet = false;
     this.proposal = null;
     this.voice.stop();
     $("coach-feedback").value = "I felt pain";
@@ -189,18 +200,18 @@ export class CoachReview {
     $("adapt-panel").hidden = true;
     text(
       "coach-status",
-      "Exercise stopped after your pain report. Remaining sets of this movement are skipped. No AI review is needed.",
+      "Exercise stopped after your pain report. If selected by mistake, edit your feedback or choose another response to enable review of completed reps. This exercise will stay stopped.",
     );
     this.render();
   }
 
   render() {
-    const unavailable = !this.context || this.stopped;
+    const unavailable = !this.context;
     $("coach-submit").disabled =
-      unavailable || this.pending || !$("coach-feedback").value.trim();
+      unavailable || this.stopped || this.pending || !$("coach-feedback").value.trim();
     text(
       "coach-submit",
-      this.context?.image ? "Review set with Gemini" : "Review locally",
+      this.hasImages ? "Review set with Gemini" : "Review locally",
     );
     $("coach-submit").setAttribute("aria-busy", String(this.pending));
     $("coach-cancel").hidden = !this.pending;
@@ -272,7 +283,7 @@ export class CoachReview {
         : reason === "no_image"
           ? "No completed-rep image is available, so nothing was sent to Gemini. Showing local guidance."
           : reason === "missing_api_key"
-            ? "Gemini is not configured on this server. Showing local guidance based on your measurements and feedback."
+            ? "Gemini is not configured. Add GEMINI_API_KEY to the project’s .env file, save it, and review again. Showing local guidance for now."
             : "Gemini analysis was unavailable. Showing local guidance based on your measurements and feedback.",
     );
     if (!document.hidden) this.voice.headline(feedback.headline);
@@ -283,6 +294,7 @@ export class CoachReview {
     const userFeedback = $("coach-feedback").value.trim();
     if (!userFeedback) return;
     if (reportsPain(userFeedback)) {
+      this.markPain();
       this.onPain();
       return;
     }
@@ -301,17 +313,17 @@ export class CoachReview {
     const summary = this.context.summary;
     text(
       "coach-status",
-      this.context.image
-        ? "Reviewing your keyframe, measurements, and feedback…"
+      this.hasImages
+        ? `Reviewing ${this.context.keyframes?.length || 1} keyframe(s), measurements, and feedback…`
         : "Preparing local guidance…",
     );
     $("coach-result").hidden = true;
     try {
-      if (!this.context.image || !this.requestCoach) {
+      if (!this.hasImages || !this.requestCoach) {
         this.showFeedback(
           localGuidance(summary, proposal),
           "fallback",
-          !this.context.image ? "no_image" : "unavailable",
+          !this.hasImages ? "no_image" : "unavailable",
         );
         return;
       }
@@ -319,7 +331,9 @@ export class CoachReview {
         {
           set_summary: summary,
           user_feedback: userFeedback,
-          keyframe_image: this.context.image,
+          ...(Array.isArray(this.context.keyframes)
+            ? { keyframes: this.context.keyframes }
+            : { keyframe_image: this.context.image }),
         },
         this.controller.signal,
       );

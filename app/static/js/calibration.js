@@ -8,6 +8,10 @@ const GROUPS = Object.freeze({
   hips: [23, 24],
   legs: [25, 26, 27, 28],
 });
+const EXERCISE_GROUPS = Object.freeze({
+  squat: ["shoulders", "hips", "legs"],
+  bicep_curl: ["shoulders", "arms", "hips"],
+});
 const CONNECTIONS = [
   [11, 12],
   [11, 13],
@@ -29,10 +33,16 @@ const emptyChecks = () => ({
   legs: false,
 });
 
-/** Both supported exercises require conservative, confident full-body framing. */
+/** Setup checks the full body; live sets check the joints used by the exercise. */
 export function evaluateLandmarks(
   landmarks,
-  { now = 0, capturedAt = now, minVisibility = 0.7, margin = 0.025 } = {},
+  {
+    now = 0,
+    capturedAt = now,
+    minVisibility = 0.7,
+    margin = 0.025,
+    exerciseId = null,
+  } = {},
 ) {
   const fresh =
     Number.isFinite(now) &&
@@ -63,7 +73,10 @@ export function evaluateLandmarks(
       indices.every(visible),
     ]),
   );
-  const allVisible = Object.values(checks).every(Boolean);
+  const requiredGroups = Object.hasOwn(EXERCISE_GROUPS, exerciseId)
+    ? EXERCISE_GROUPS[exerciseId]
+    : Object.keys(GROUPS);
+  const allVisible = requiredGroups.every((name) => checks[name]);
   let message =
     "Step back / Adjust angle. Keep shoulders, hands, hips, knees, and ankles inside the frame.";
   if (!fresh)
@@ -71,11 +84,11 @@ export function evaluateLandmarks(
       "Assessment Unavailable. The camera frame is stale; wait for a live image or restart the camera.";
   else if (!landmarks?.length)
     message =
-      "Assessment Unavailable. Stand in view with your whole body visible.";
-  else if (!checks.legs)
+      "Assessment Unavailable. Stand in view with the required joints visible.";
+  else if (requiredGroups.includes("legs") && !checks.legs)
     message =
       "Step back / Adjust angle. Move far enough back to show both knees and ankles.";
-  else if (!checks.arms)
+  else if (requiredGroups.includes("arms") && !checks.arms)
     message =
       "Step back / Adjust angle. Keep both elbows and hands visible, away from your torso.";
   else if (!checks.shoulders || !checks.hips)
@@ -87,7 +100,8 @@ export function evaluateLandmarks(
 
 /** Readiness requires uninterrupted fresh observations, never a cached success. */
 export class CalibrationGate {
-  constructor() {
+  constructor({ exerciseId = null } = {}) {
+    this.exerciseId = exerciseId;
     this.reset();
   }
   reset() {
@@ -95,7 +109,11 @@ export class CalibrationGate {
     this.lastCapturedAt = null;
   }
   update(landmarks, now, capturedAt = now) {
-    const result = evaluateLandmarks(landmarks, { now, capturedAt });
+    const result = evaluateLandmarks(landmarks, {
+      now,
+      capturedAt,
+      exerciseId: this.exerciseId,
+    });
     const gap =
       this.lastCapturedAt === null ? 0 : capturedAt - this.lastCapturedAt;
     if (!result.allVisible || gap > MAX_FRAME_AGE_MS || gap < 0)
@@ -118,7 +136,7 @@ export class CalibrationGate {
           ? "stabilizing"
           : "unavailable",
       message: ready
-        ? "Ready. Your full body is visible and the camera framing is stable."
+        ? "Ready. All required joints are visible and the camera framing is stable."
         : result.message,
     };
   }
@@ -143,15 +161,14 @@ export class CameraCalibration {
     this.lastInferenceAt = -Infinity;
     this.lastFrameAt = -Infinity;
     this.lastStatus = null;
-    this.camera = new CameraSession(video, {
-      onInterrupted: (message) => {
-        this.stop();
-        this.emit({
-          status: "stopped",
-          message: `Assessment Unavailable. ${message}`,
-        });
-      },
-    });
+    this.onInterrupted = (message) => {
+      this.stop();
+      this.emit({
+        status: "stopped",
+        message: `Assessment Unavailable. ${message}`,
+      });
+    };
+    this.camera = new CameraSession(video, { onInterrupted: this.onInterrupted });
   }
 
   emit(update) {
@@ -173,13 +190,14 @@ export class CameraCalibration {
     }
   }
 
-  async start({ exerciseId = "squat" } = {}) {
+  async start({ exerciseId = "squat", fullBody = true } = {}) {
     this.stop();
     this.exerciseId = exerciseId;
+    this.gate = new CalibrationGate({ exerciseId: fullBody ? null : exerciseId });
     const generation = this.generation;
     this.emit({
       status: "loading",
-      message: "Allow camera access to check your full-body framing.",
+      message: "Allow camera access to check your framing.",
     });
     try {
       if (!(await this.camera.start()) || generation !== this.generation)
@@ -224,8 +242,11 @@ export class CameraCalibration {
       this.lastFrameAt = performance.now();
       this.emit({
         status: "unavailable",
-        message:
-          "Step back / Adjust angle. Stand a few steps back with your whole body visible.",
+        message: fullBody
+          ? "Step back / Adjust angle. Stand a few steps back with your whole body visible."
+          : exerciseId === "squat"
+            ? "Keep your shoulders, hips, knees, and ankles visible. Your hands can rest where comfortable."
+            : "Keep your shoulders, elbows, hands, and hips visible.",
       });
       this.frameRequest = requestAnimationFrame((now) =>
         this.tick(now, generation),
@@ -238,6 +259,37 @@ export class CameraCalibration {
         status: "error",
         message: `Assessment Unavailable. ${message}`,
       });
+    }
+  }
+
+  async takeOver(source, { exerciseId }) {
+    this.stop();
+    const generation = this.generation;
+    // Transfer ownership before routing stops the old view. Its later cleanup
+    // must never close the stream or model now owned by the workout.
+    [this.camera, source.camera] = [source.camera, this.camera];
+    this.camera.onInterrupted = this.onInterrupted;
+    source.camera.onInterrupted = source.onInterrupted;
+    this.landmarker = source.landmarker;
+    source.landmarker = null;
+    source.stop();
+    source.camera.video = source.video;
+    this.exerciseId = exerciseId;
+    this.gate = new CalibrationGate({ exerciseId });
+    this.emit({ status: "loading", message: "Camera connected. Checking your workout position…" });
+    try {
+      if (!this.landmarker) throw new Error("Restart the camera to restore movement tracking.");
+      if (!(await this.camera.moveTo(this.video)) || generation !== this.generation) {
+        if (generation === this.generation) this.stop();
+        return;
+      }
+      this.lastFrameAt = performance.now();
+      this.emit({ status: "unavailable", message: "Camera connected. Hold your starting position briefly, then start your set." });
+      this.frameRequest = requestAnimationFrame((now) => this.tick(now, generation));
+    } catch (error) {
+      if (generation !== this.generation) return;
+      this.stop();
+      this.emit({ status: "error", message: cameraErrorMessage(error) });
     }
   }
 

@@ -84,7 +84,7 @@ test("opens one retained worst-rep highlight per set with accurate still labels 
   assert.equal(f.element("image").hidden, false);
   assert.equal(f.element("empty").hidden, true);
   assert.match(f.element("caption").textContent, /Squats · Set 1 · Rep 2/);
-  assert.match(f.element("caption").textContent, /Worst-rep bottom keyframe/);
+  assert.match(f.element("caption").textContent, /Bottom keyframe/);
   assert.match(f.element("detail").textContent, /Bottom 1.3s after rep start/);
   assert.match(f.element("detail").textContent, /Peak angle 100.3°/);
   assert.match(f.element("detail").textContent, /Cadence 2.5s/);
@@ -149,6 +149,7 @@ test("sets without frame records show their worst measured rep, while empty sets
   assert.equal(f.replay.entries[0].rep.rep_number, 2);
   assert.equal(f.element("empty").hidden, false);
   assert.equal(f.element("play").disabled, true);
+  assert.equal(f.element("play").textContent, "Only one keyframe saved");
   assert.equal(f.element("slider").disabled, true);
   f.replay.dispose();
 });

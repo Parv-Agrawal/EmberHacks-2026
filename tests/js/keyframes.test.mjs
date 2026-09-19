@@ -158,10 +158,43 @@ test("clear releases both JPEG references and pixel storage and permits a fresh 
   f.buffer.clear();
   assert.equal(f.buffer.worst, null);
   assert.equal(f.buffer.candidate, null);
+  assert.deepEqual(f.buffer.completed, []);
   assert.equal(f.canvas.width, 0);
   assert.equal(f.canvas.height, 0);
   f.image("data:image/jpeg;base64,new-set");
   f.observe({ captureCandidate: true, completedRep: rep(1, 0) });
   assert.equal(f.buffer.worst.image, "data:image/jpeg;base64,new-set");
   assert.equal(f.canvas.width, 640);
+});
+
+test("replay retains each completed rep in order without adding an interrupted rep", () => {
+  const f = fixture();
+  for (const number of [1, 2, 3]) {
+    f.image(`data:image/jpeg;base64,rep${number}`);
+    f.observe({ captureCandidate: true, completedRep: rep(number, number === 2 ? 20 : 0) });
+  }
+  f.observe({ captureCandidate: true });
+  f.buffer.discardPartial();
+  assert.deepEqual(f.buffer.completed.map((frame) => frame.rep.rep_number), [1, 2, 3]);
+  assert.deepEqual(f.buffer.completed.map((frame) => frame.image), [1, 2, 3].map(
+    (number) => `data:image/jpeg;base64,rep${number}`,
+  ));
+  assert.equal(f.buffer.worst.rep.rep_number, 2);
+});
+
+test("active replay has bounded frame count and JPEG memory while retaining the coaching image", () => {
+  const f = fixture();
+  for (let number = 1; number <= 45; number++)
+    f.observe({ captureCandidate: true, completedRep: rep(number, 0) });
+  assert.equal(f.buffer.completed.length, 40);
+  assert.equal(f.buffer.completed[0].rep.rep_number, 6);
+  assert.equal(f.buffer.worst.rep.rep_number, 1);
+  f.buffer.clear();
+  f.image(`data:image/jpeg;base64,${"A".repeat(2 * 1024 * 1024)}`);
+  for (let number = 1; number <= 3; number++)
+    f.observe({ captureCandidate: true, completedRep: rep(number, 0) });
+  assert.ok(f.buffer.completed.reduce((sum, frame) => sum + (frame.image?.length || 0) * 2, 0) <= 8 * 1024 * 1024);
+  assert.equal(f.buffer.completed[0].imageStatus, "memory-limit");
+  assert.ok(f.buffer.completed.at(-1).image);
+  assert.ok(f.buffer.worst.image);
 });

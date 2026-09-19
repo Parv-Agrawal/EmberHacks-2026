@@ -105,7 +105,7 @@ export class LiveWorkout {
     this.renderVoice();
   }
 
-  open(workout) {
+  open(workout, { camera = null } = {}) {
     this.dispose();
     $("workout-live-shell").hidden = false;
     $("session-summary").hidden = true;
@@ -122,6 +122,10 @@ export class LiveWorkout {
     this.blockedExercises = new Set();
     this.interval = setInterval(() => this.renderTime(), 200);
     this.prepare();
+    if (camera) {
+      text("live-cue", "Your camera is connected. Find your starting position, then start your set.");
+      void this.camera.takeOver(camera, { exerciseId: this.exercise.id });
+    }
   }
 
   get exercise() {
@@ -187,7 +191,7 @@ export class LiveWorkout {
     if (!["preparing", "paused"].includes(this.stage)) return;
     this.stage = "preparing";
     this.cameraState = null;
-    await this.camera.start({ exerciseId: this.exercise.id });
+    await this.camera.start({ exerciseId: this.exercise.id, fullBody: false });
   }
 
   onCamera(update) {
@@ -232,7 +236,9 @@ export class LiveWorkout {
     this.frames.discardPartial();
     text(
       "live-cue",
-      "Start tall with your arms lowered. Only complete, visible repetitions count.",
+      this.exercise.id === "squat"
+        ? "Stand tall, then squat and return to standing. Keep your hips, knees, and ankles visible."
+        : "Start with both arms lowered, curl, then lower with control. Keep both arms visible.",
     );
     this.voice.cue("Start in your resting position. Move at your own pace.", {
       key: "start",
@@ -340,7 +346,7 @@ export class LiveWorkout {
       setNumber: this.setIndex + 1,
       summary,
       elapsedMs: this.elapsed,
-      keyframes: worst ? [worst] : [],
+      keyframes: this.frames.completed,
       stoppedForPain: this.painStopped,
     });
     $("worst-keyframe").hidden = !worst?.image;
@@ -357,6 +363,9 @@ export class LiveWorkout {
     this.review.open({
       summary,
       image: worst?.image || null,
+      keyframes: this.frames.completed
+        .filter((frame) => frame.image)
+        .map((frame) => ({ rep_number: frame.rep.rep_number, image: frame.image })),
       exercise: this.exercise,
       hasNextSet: !this.painStopped && this.setIndex + 1 < this.exercise.sets,
     });
@@ -438,7 +447,7 @@ export class LiveWorkout {
       setNumber: this.setIndex + 1,
       summary: this.tracker.summary(),
       elapsedMs: this.elapsed,
-      keyframes: this.frames.worst ? [this.frames.worst] : [],
+      keyframes: this.frames.completed,
       stoppedForPain: true,
     });
     text("live-badge", "Exercise stopped");

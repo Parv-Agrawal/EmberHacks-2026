@@ -10,6 +10,7 @@ export const MOVEMENT_RULES = Object.freeze({
       [24, 26, 28],
     ],
     startAngle: 160,
+    finishAngle: 155,
     departAngle: 148,
     minimumFlexion: 140,
     fullFlexion: 105,
@@ -23,6 +24,7 @@ export const MOVEMENT_RULES = Object.freeze({
       [12, 14, 16],
     ],
     startAngle: 155,
+    finishAngle: 150,
     departAngle: 140,
     minimumFlexion: 115,
     fullFlexion: 65,
@@ -39,6 +41,8 @@ const MIN_REP_MS = 700;
 const MAX_REP_MS = 30_000;
 const REVERSE_DELTA = 9;
 const MAX_TARGET_REPS = 100;
+const STARTING_MIN = Object.freeze({ squat: 145, bicep_curl: 135 });
+const STANDING_JITTER_DEG = 6;
 
 const round = (number, digits = 1) => Number(number.toFixed(digits));
 const cloneRep = (rep) => ({ ...rep, faults: [...rep.faults] });
@@ -81,6 +85,7 @@ export class MovementTracker {
     this.reps = [];
     this.lastCapturedAt = null;
     this.lastNow = null;
+    this.standingAngles = null;
     this.resetPartial();
   }
 
@@ -88,6 +93,7 @@ export class MovementTracker {
     this.phase = "start";
     this.armed = false;
     this.startSince = null;
+    this.standingWindow = null;
     this.departSince = null;
     this.reverseSince = null;
     this.finishSince = null;
@@ -100,8 +106,8 @@ export class MovementTracker {
 
   startMessage() {
     return this.exerciseId === "squat"
-      ? "Stand tall with both legs straight briefly to begin."
-      : "Lower both arms and hold them straight briefly to begin.";
+      ? "Stand tall and hold still briefly to calibrate your starting position."
+      : "Lower both arms and hold still briefly to calibrate your starting position.";
   }
 
   snapshot(overrides = {}) {
@@ -123,8 +129,9 @@ export class MovementTracker {
 
   /** Camera loss/pause discards only the incomplete rep, never completed reps. */
   invalidate(
-    message = "Assessment Unavailable. Restore full-body visibility, then return to the starting position.",
+    message = "Assessment Unavailable. Bring the required joints back into view, then return to the starting position.",
   ) {
+    this.standingAngles = null;
     this.resetPartial();
     return this.snapshot({
       available: false,
@@ -134,7 +141,11 @@ export class MovementTracker {
   }
 
   update({ landmarks, worldLandmarks, now, capturedAt = now } = {}) {
-    const framing = evaluateLandmarks(landmarks, { now, capturedAt });
+    const framing = evaluateLandmarks(landmarks, {
+      now,
+      capturedAt,
+      exerciseId: this.exerciseId,
+    });
     const chronological =
       Number.isFinite(now) &&
       Number.isFinite(capturedAt) &&
@@ -182,24 +193,51 @@ export class MovementTracker {
       };
 
     if (!this.armed) {
-      this.startSince =
-        extensionAngle >= this.rules.startAngle
-          ? (this.startSince ?? capturedAt)
-          : null;
+      // Camera estimates can undershoot fixed straight-joint thresholds.
+      // Calibrate each knee or elbow from a stable starting pose, never
+      // from a single frame or a moving return from flexion.
+      if (extensionAngle < STARTING_MIN[this.exerciseId]) {
+        this.startSince = null;
+        this.standingWindow = null;
+        return state;
+      }
+      const window = this.standingWindow;
       if (
-        this.startSince !== null &&
-        capturedAt - this.startSince >= ARM_DWELL_MS
+        !window ||
+        angles.some((angle, side) =>
+          Math.max(window.max[side], angle) - Math.min(window.min[side], angle) > STANDING_JITTER_DEG)
       ) {
+        this.standingWindow = {
+          min: [...angles],
+          max: [...angles],
+          sum: [...angles],
+          count: 1,
+        };
+        this.startSince = capturedAt;
+      } else {
+        angles.forEach((angle, side) => {
+          window.min[side] = Math.min(window.min[side], angle);
+          window.max[side] = Math.max(window.max[side], angle);
+          window.sum[side] += angle;
+        });
+        window.count += 1;
+      }
+      if (capturedAt - this.startSince >= ARM_DWELL_MS) {
+        this.standingAngles = this.standingWindow.sum.map(
+          (sum) => sum / this.standingWindow.count,
+        );
         this.armed = true;
-        state.formMessage =
-          "Ready. Move both sides together at a controlled pace.";
+        state.formMessage = this.exerciseId === "squat"
+          ? "Starting position calibrated. Squat down, then stand back up."
+          : "Starting position calibrated. Curl both arms, then lower them back to this position.";
       }
       return state;
     }
 
     if (!this.partial) {
       this.departSince =
-        flexionAngle <= this.rules.departAngle
+        angles.every((angle, side) =>
+          angle <= this.threshold("departAngle", side, 15))
           ? (this.departSince ?? capturedAt)
           : null;
       state.formMessage =
@@ -215,6 +253,7 @@ export class MovementTracker {
         peakAngle: flexionAngle,
         maxAsymmetry: 0,
         asymmetricSince: null,
+        reachedFlexion: false,
       };
       this.phase = this.rules.outbound;
       this.departSince = null;
@@ -222,6 +261,8 @@ export class MovementTracker {
     }
 
     const rep = this.partial;
+    rep.reachedFlexion ||= angles.every((angle, side) =>
+      angle <= this.threshold("minimumFlexion", side, 25));
     if (capturedAt - rep.startedAt > MAX_REP_MS)
       return this.invalidate(
         "Assessment Unavailable. This movement took too long to assess. Return to the starting position.",
@@ -282,8 +323,12 @@ export class MovementTracker {
       this.faultMessage(state.faults) || this.movementMessage(rep);
 
     if (this.phase === this.rules.inbound) {
+      // A small extension hysteresis lets continuous reps finish without
+      // requiring a deliberate pause at the exact initial standing angle.
+      // Both sides must still sustain the return after a meaningful excursion.
       this.finishSince =
-        extensionAngle >= this.rules.startAngle
+        angles.every((angle, side) =>
+          angle >= this.threshold("finishAngle", side, 5))
           ? (this.finishSince ?? capturedAt)
           : null;
       if (
@@ -292,7 +337,7 @@ export class MovementTracker {
       ) {
         const duration = capturedAt - rep.startedAt;
         if (
-          rep.peakAngle > this.rules.minimumFlexion ||
+          !rep.reachedFlexion ||
           duration < MIN_REP_MS
         ) {
           this.resetPartial();
@@ -349,6 +394,12 @@ export class MovementTracker {
       }
     }
     return state;
+  }
+
+  threshold(rule, side, standingOffset) {
+    return this.standingAngles
+      ? Math.min(this.rules[rule], this.standingAngles[side] - standingOffset)
+      : this.rules[rule];
   }
 
   faultMessage(faults) {
